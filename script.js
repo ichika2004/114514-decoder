@@ -1,25 +1,26 @@
 /**
- * RSA x 114514 純數字論證器
- * 特色：使用 0 作為分隔號，保留完整 PEM 前後綴
+ * RSA x 114514 純數字論證器 (NSYSU IM 專業版)
+ * 定製：使用 810 作為分隔符，套用使用者指定 HOMO_MAP
  */
 
+// 1. 完全遵循使用者指定的數碼映射
 const HOMO_MAP = [
-    "114514",         // 0
-    "1919",           // 1
-    "81",             // 2 
-    "114",            // 3
-    "514",            // 4
-    "191981",         // 5 
-    "811919",         // 6 
-    "5141919",        // 7
-    "1145141919",     // 8
-    "114514191981"    // 9 (原本 1145141919810)
+    "114514",       // 0
+    "1919",         // 1
+    "364364",       // 2 
+    "114",          // 3
+    "514",          // 4
+    "889464",       // 5 
+    "364",          // 6 
+    "931",          // 7
+    "893",          // 8
+    "1145141919"    // 9 
 ];
 
-const SEPARATOR = "0";
+const SEPARATOR = "810";
 
 /**
- * 編碼邏輯
+ * 編碼邏輯：ASCII(065) -> "114514810811919810191981"
  */
 function encodeToNumbers(code) {
     return code.toString().padStart(3, '0').split('')
@@ -28,15 +29,19 @@ function encodeToNumbers(code) {
 }
 
 /**
- * 解碼邏輯 (精確切割 0)
+ * 解碼邏輯：利用 810 分隔符精確切割
  */
 function decodeFromNumbers(str) {
+    if (!str) return "";
+    // 先按 810 切開，保證 364364 不會被誤認成兩個 364
     const parts = str.split(SEPARATOR);
     let resultNum = "";
+    
     parts.forEach(part => {
         const index = HOMO_MAP.indexOf(part);
         if (index !== -1) resultNum += index.toString();
     });
+
     let chars = [];
     for (let i = 0; i < resultNum.length; i += 3) {
         let code = resultNum.substring(i, i + 3);
@@ -46,14 +51,13 @@ function decodeFromNumbers(str) {
 }
 
 /**
- *  生成 256-bit 金鑰 (完整 PEM 格式)
+ * 🚀 金鑰生成 (256-bit PEM)
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
-    alert("正在生成標準 256-bit PEM 金鑰...");
-    
-    const pub = crypt.getPublicKey();   // 帶有 -----BEGIN PUBLIC KEY-----
-    const priv = crypt.getPrivateKey(); // 帶有 -----BEGIN PRIVATE KEY-----
+    alert("正在生成 256-bit PEM 金鑰...");
+    const pub = crypt.getPublicKey();
+    const priv = crypt.getPrivateKey();
     
     document.getElementById('encryptKeyInput').value = pub;
     document.getElementById('decryptKeyInput').value = priv;
@@ -62,7 +66,7 @@ function generateTestKeys() {
     localStorage.setItem('rsa_priv_cache', priv);
     
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(priv).then(() => alert("金鑰已同步填入，私鑰已複製！"));
+        navigator.clipboard.writeText(priv).then(() => alert("✅ 金鑰已填入，私鑰已複製！"));
     }
 }
 
@@ -75,9 +79,9 @@ function doEncrypt() {
     encryptor.setPublicKey(key);
     const rsaRes = encryptor.encrypt(text);
 
-    if (!rsaRes) return alert("加密失敗！256-bit 空間有限，請縮短文字。");
+    if (!rsaRes) return alert("加密失敗！256-bit 限制長度約 20 字。");
 
-    // 用 0 串接所有數碼
+    // 每一組字元編碼之間也用 810 連結，形成壯觀的數字牆
     const result = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEPARATOR);
     document.getElementById('encryptOutput').innerText = result;
     localStorage.setItem('rsa_pub_cache', key);
