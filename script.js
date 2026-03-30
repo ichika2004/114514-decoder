@@ -1,56 +1,48 @@
 /**
- * RSA x 114514 純數字論證器 (穩定分段版)
- * 解決：0/00/000 階梯分隔衝突
+ * RSA x 114514 純數字論證器 (高密度優化版)
+ * 特色：6-bit 直接映射技術，密文長度縮減 33%
  */
 
-// 1. 映射表：必須移除所有內部 0，由分隔符補齊視覺效果
-const HOMO_MAP = [
-    "114514",       // 0
-    "1919",         // 1
-    "81",           // 2 (拼上 SEP 後視覺為 810)
-    "114",          // 3
-    "514",          // 4
-    "889464",       // 5 
-    "364",          // 6 
-    "931",          // 7
-    "893",          // 8
-    "1145141919"    // 9 
-];
-
+// 1. 映射表：維持不含 0 的原則
+const HOMO_MAP = ["114514", "1919", "81", "114", "514", "889464", "364", "931", "893", "1145141919"];
 const SEP = "0";     // 分隔數字
-const C_SEP = "00";  // 分隔字元 (Character)
-const B_SEP = "000"; // 分隔區塊 (RSA Block)
+const C_SEP = "00";  // 分隔 Base64 字元
+const B_SEP = "000"; // 分隔 RSA 區塊
+
+// Base64 索引表
+const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 
 /**
- * 編碼：將一個字元轉為數碼序列
+ * 高密度編碼：將 1 個 Base64 字元轉為 2 組數碼 (00~64)
  */
-function encodeChar(code) {
-    return code.toString().padStart(3, '0').split('')
+function encodeB64Char(char) {
+    const index = B64_CHARS.indexOf(char);
+    if (index === -1) return "";
+    // 將索引轉為 2 位數 (00-64)，例如 index 5 變成 "05"
+    return index.toString().padStart(2, '0').split('')
         .map(digit => HOMO_MAP[parseInt(digit)])
         .join(SEP);
 }
 
 /**
- * 解碼：從數字牆還原 Base64
+ * 高密度解碼：從數碼牆還原 Base64
  */
-function decodeToBase64(blockStr) {
-    // 先按字元分隔符 (00) 切開
+function decodeToB64(blockStr) {
     const chars = blockStr.split(C_SEP).filter(c => c.length > 0);
-    let resultBase64 = "";
+    let resultB64 = "";
 
     chars.forEach(charStr => {
-        // 再按數字分隔符 (0) 切開
         const digits = charStr.split(SEP).filter(d => d.length > 0);
-        let charCodeStr = "";
+        let indexStr = "";
         digits.forEach(d => {
             const idx = HOMO_MAP.indexOf(d);
-            if (idx !== -1) charCodeStr += idx.toString();
+            if (idx !== -1) indexStr += idx.toString();
         });
-        if (charCodeStr.length === 3) {
-            resultBase64 += String.fromCharCode(parseInt(charCodeStr));
+        if (indexStr.length === 2) {
+            resultB64 += B64_CHARS[parseInt(indexStr)];
         }
     });
-    return resultBase64;
+    return resultB64;
 }
 
 /**
@@ -64,21 +56,18 @@ function doEncrypt() {
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(key);
 
-    const CHUNK_SIZE = 5; // 256-bit 建議長度
+    const CHUNK_SIZE = 10; // 密度提高後，分段可以稍微放大
     let encryptedBlocks = [];
 
     for (let i = 0; i < text.length; i += CHUNK_SIZE) {
         const chunk = text.substring(i, i + CHUNK_SIZE);
         const rsaRes = encryptor.encrypt(chunk);
-        
         if (!rsaRes) continue;
         
-        // 轉換為數字串：字元之間用 00 隔開
-        const homoBlock = rsaRes.split('').map(c => encodeChar(c.charCodeAt(0))).join(C_SEP);
+        // 直接對 RSA 產出的 Base64 字串進行高密度映射
+        const homoBlock = rsaRes.split('').map(c => encodeB64Char(c)).join(C_SEP);
         encryptedBlocks.push(homoBlock);
     }
-
-    // 區塊之間用 000 隔開
     document.getElementById('encryptOutput').innerText = encryptedBlocks.join(B_SEP);
 }
 
@@ -94,29 +83,26 @@ function doDecrypt() {
     decryptor.setPrivateKey(key);
 
     try {
-        // 依據區塊分隔符 (000) 切開
         const blocks = formula.split(B_SEP).filter(b => b.length > 10);
         let finalResult = "";
 
         blocks.forEach((block, idx) => {
-            const base64 = decodeToBase64(block);
+            const base64 = decodeToB64(block);
             const decrypted = decryptor.decrypt(base64);
             if (decrypted) {
                 finalResult += decrypted;
             } else {
-                console.error(`第 ${idx + 1} 區塊 RSA 解密失敗。還原 Base64: ${base64}`);
+                console.error(`第 ${idx + 1} 區塊解密失敗`);
             }
         });
-
-        document.getElementById('decryptOutput').innerText = finalResult || "解密失敗：內容損壞或金鑰不符";
+        document.getElementById('decryptOutput').innerText = finalResult || "解密失敗：金鑰不符";
     } catch (e) {
-        console.error(e);
-        alert("解析失敗，請確認密文完整性。");
+        alert("數字牆損壞，無法解析。");
     }
 }
 
 /**
- * 金鑰與輔助
+ * 金鑰與自動同步
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
@@ -126,7 +112,7 @@ function generateTestKeys() {
     document.getElementById('decryptKeyInput').value = priv;
     localStorage.setItem('rsa_pub_cache', pub);
     localStorage.setItem('rsa_priv_cache', priv);
-    alert(" 256-bit PEM 金鑰已生成！");
+    alert(" 會員制 256-bit 金鑰對已生成！");
 }
 
 function copyToDecrypt() {
