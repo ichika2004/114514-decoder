@@ -1,35 +1,31 @@
 /**
  * ---------------------------------------------------------
- * RSA x 114514 惡臭加密器 (v4.0 惡臭外溢版)
- * 專為 NSYSU IM 打造：解決解析錯誤 & 強化視覺效果
+ * RSA x 114514 惡臭加密器 (v5.0 自動化增強版)
+ * 專為 NSYSU IM 專案打造
  * ---------------------------------------------------------
  */
 
-// 1. 核心惡臭基數 (按優先權排序)
+// 1. 核心惡臭基數
 const HOMO_BASES = [114514, 514, 114, 14, 11, 5, 4, 1];
 
 /**
- * 貪婪湊數法：將數字 N 轉化為純粹的 114514 數字堆疊
- * 例如：65 會變成 "14+14+14+14+5+4"
+ * 貪婪湊數法：產生 11451411451... 的視覺效果
  */
 function getHomo(n) {
     if (n === 0) return "0";
     let temp = n;
     let res = [];
-    
-    // 遍歷基數，能塞多少就塞多少，產生 11451411451... 的視覺感
     for (let b of HOMO_BASES) {
         while (temp >= b) {
             res.push(b);
             temp -= b;
         }
     }
-    // 使用 + 連接，看起來會非常像一串連續數字
     return res.join('+');
 }
 
 /**
- * 自動修正 PEM 標籤
+ * PEM 格式自動修正
  */
 function formatPEM(rawKey, type = "PUBLIC") {
     let cleanKey = rawKey.trim();
@@ -41,7 +37,7 @@ function formatPEM(rawKey, type = "PUBLIC") {
 }
 
 /**
- * 加密：將明文轉為一連串「惡臭算式」
+ * 加密：明文 -> 114514 數字牆
  */
 function doEncrypt() {
     const rawKey = document.getElementById('keyInput').value;
@@ -58,17 +54,15 @@ function doEncrypt() {
 
     if (!rsaRes) return alert("RSA 加密失敗！");
 
-    // 將每個 ASCII 字元轉為一組算式，並用「空白」區隔字元
-    // 這樣視覺上會像是一整塊 114514 數字牆
     const homoFormula = rsaRes.split('').map(char => {
         return getHomo(char.charCodeAt(0));
-    }).join(' '); // 這裡用空白區隔每個字元，避免 + 號過多導致解析混亂
+    }).join(' ');
 
     document.getElementById('cipherOutput').innerText = homoFormula;
 }
 
 /**
- * 解密：將數字牆還原 (修正 Unexpected end of input)
+ * 解密：數字牆還原 (含空值過濾)
  */
 function doDecrypt() {
     const rawKey = document.getElementById('keyInput').value;
@@ -80,15 +74,11 @@ function doDecrypt() {
     localStorage.setItem('rsa_key_cache', rawKey);
 
     try {
-        // 先按空白切分字元，再按加號計算數值
         const base64Result = formula.split(/\s+/).map(charSeg => {
             if (!charSeg.trim()) return "";
-            
-            // 將 "514+114+1" 這種算式安全地加總
             const charCode = charSeg.split('+')
                 .filter(num => num.trim().length > 0)
                 .reduce((sum, num) => sum + parseInt(num, 10), 0);
-                
             return String.fromCharCode(charCode);
         }).join('');
 
@@ -102,25 +92,44 @@ function doDecrypt() {
             alert("解密失敗！私鑰可能不正確。");
         }
     } catch (e) {
-        console.error("解密錯誤:", e);
-        alert("解析失敗，請確認密文格式是否正確。");
+        alert("解析失敗，請確認密文格式。");
     }
 }
 
 /**
- * 其他功能保持不變
+ * 🚀 重點功能：生成金鑰並「自動複製私鑰」
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成金鑰...");
+    
+    // 提示使用者正在處理，因為 1024-bit 需要一點計算時間
+    alert("正在生成 RSA 金鑰對（1024-bit），請稍候...");
+    
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
+    
+    // 1. 將公鑰填入輸入框
     document.getElementById('keyInput').value = pub;
-    console.log("--- 私鑰 ---");
-    console.log(priv);
-    alert("公鑰已填入。私鑰已印在 Console (F12)。");
+    
+    // 2. 使用 Clipboard API 自動複製私鑰
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(priv).then(() => {
+            alert("✅ 金鑰生成成功！\n1. 公鑰已自動填入輸入框。\n2. 私鑰已自動複製到您的剪貼簿，請妥善保存。");
+        }).catch(err => {
+            console.error("複製失敗:", err);
+            console.log("您的私鑰如下：\n", priv);
+            alert("公鑰已填入，但自動複製私鑰失敗，請按 F12 在 Console 複製。");
+        });
+    } else {
+        // 相容性回退方案
+        console.log("您的私鑰如下：\n", priv);
+        alert("您的瀏覽器不支援自動複製，請按 F12 在 Console 查看私鑰。");
+    }
 }
 
+/**
+ * 初始化載入與拖放
+ */
 window.onload = function() {
     const savedKey = localStorage.getItem('rsa_key_cache');
     if (savedKey) document.getElementById('keyInput').value = savedKey;
