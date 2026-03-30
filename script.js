@@ -1,11 +1,13 @@
 /**
  * ---------------------------------------------------------
- * RSA x 114514 惡臭論證加密器 (v7.0 MagicConch Style)
+ * RSA x 114514 惡臭論證器 (Bug-Free 穩定版)
+ * 解決 split('+') 導致的解析衝突
  * ---------------------------------------------------------
  */
 
 const HOMO_BASES = [114514, 1919, 810, 514, 114, 51, 4];
 
+// 核心論證演算法
 function getHomo(n) {
     if (n === 0) return "0";
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
@@ -34,70 +36,50 @@ function formatPEM(rawKey, type = "PUBLIC") {
     return cleanKey;
 }
 
+// 【加密】
 function doEncrypt() {
-    const pubKeyEl = document.getElementById('encryptKeyInput');
-    const textEl = document.getElementById('encryptInput');
-    
-    if (!pubKeyEl || !textEl) return console.error("找不到加密輸入欄位！");
-
-    const pubKeyRaw = pubKeyEl.value;
-    const text = textEl.value;
-    
+    const pubKeyRaw = document.getElementById('encryptKeyInput').value;
+    const text = document.getElementById('encryptInput').value;
     if (!pubKeyRaw || !text) return alert("請輸入公鑰與明文！");
 
     const pubKey = formatPEM(pubKeyRaw, "PUBLIC");
-    localStorage.setItem('rsa_pub_cache', pubKeyRaw);
-
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(pubKey);
     const rsaRes = encryptor.encrypt(text);
 
     if (!rsaRes) return alert("RSA 加密失敗！");
 
+    // 每個字元包在 [] 裡
     const homoFormula = rsaRes.split('').map(char => {
         return `[${getHomo(char.charCodeAt(0))}]`;
     }).join('+');
 
     document.getElementById('encryptOutput').innerText = homoFormula;
+    localStorage.setItem('rsa_pub_cache', pubKeyRaw);
 }
 
+// 【解密】關鍵修復：使用 Regex 匹配 [ ]
 function doDecrypt() {
-    const privKeyEl = document.getElementById('decryptKeyInput');
-    const formulaEl = document.getElementById('decryptInput');
-
-    if (!privKeyEl || !formulaEl) return console.error("找不到解密輸入欄位！");
-
-    const privKeyRaw = privKeyEl.value.trim();
-    const formula = formulaEl.value.trim();
-
+    const privKeyRaw = document.getElementById('decryptKeyInput').value;
+    const formula = document.getElementById('decryptInput').value.trim();
     if (!privKeyRaw || !formula) return alert("請輸入私鑰與密文！");
 
     const privKey = formatPEM(privKeyRaw, "PRIVATE");
     localStorage.setItem('rsa_priv_cache', privKeyRaw);
 
     try {
-        // 1. 分解算式
-        const base64Result = formula.split('+')
-            .map(s => s.trim())
-            .filter(s => s.length > 0)
-            .map((seg, index) => {
-                // 移除中括號 [ ]
-                const cleanSeg = seg.replace(/[\[\]]/g, '').trim();
-                
-                if (!cleanSeg) return "";
+        // 使用正則抓取所有 [ ... ] 內容，忽略中間的加號
+        const segments = formula.match(/\[(.*?)\]/g);
+        if (!segments) throw new Error("找不到有效的算式區段");
 
-                try {
-                    // 使用 new Function 計算算式值
-                    const val = new Function(`return ${cleanSeg}`)();
-                    return String.fromCharCode(val);
-                } catch (evalErr) {
-                    // 【關鍵偵錯】如果某一段算式壞了，印出編號與內容
-                    console.error(`第 ${index} 段算式解析失敗: "${cleanSeg}"`);
-                    throw new Error(`第 ${index} 段算式格式錯誤`);
-                }
-            }).join('');
+        const base64Result = segments.map(seg => {
+            // 移除前後的中括號
+            const cleanSeg = seg.slice(1, -1);
+            // 安全計算
+            const val = new Function(`return ${cleanSeg}`)();
+            return String.fromCharCode(val);
+        }).join('');
 
-        // 2. RSA 解密
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(privKey);
         const result = decryptor.decrypt(base64Result);
@@ -105,45 +87,38 @@ function doDecrypt() {
         if (result) {
             document.getElementById('decryptOutput').innerText = result;
         } else {
-            // 如果解析沒錯但解密失敗，通常是私鑰不匹配
-            alert("解密失敗！這通常代表「私鑰不正確」或「密文被改動過」。");
+            alert("解密失敗：私鑰不正確或密文損壞。");
         }
     } catch (e) {
-        console.error("解密過程出錯:", e);
-        alert("算式解析失敗：" + e.message);
+        console.error("解密錯誤詳情:", e);
+        alert("解析失敗：" + e.message);
     }
 }
 
 function copyToDecrypt() {
     const result = document.getElementById('encryptOutput').innerText;
-    const decryptTarget = document.getElementById('decryptInput');
-    if (result.includes("尚未") || !decryptTarget) return;
-    decryptTarget.value = result;
+    const target = document.getElementById('decryptInput');
+    if (result && target && !result.includes("尚未")) {
+        target.value = result;
+    }
 }
 
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成金鑰對...");
+    alert("正在生成金鑰對，請稍候...");
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
-    
-    const encryptKeyInput = document.getElementById('encryptKeyInput');
-    if (encryptKeyInput) encryptKeyInput.value = pub;
-    
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    document.getElementById('encryptKeyInput').value = pub;
+    if (navigator.clipboard) {
         navigator.clipboard.writeText(priv).then(() => {
-            alert("✅ 生成成功！公鑰已填入，私鑰已複製。");
+            alert("✅ 生成成功！公鑰已填入，私鑰已複製到剪貼簿。");
         });
     }
 }
 
 window.onload = function() {
-    const savedPub = localStorage.getItem('rsa_pub_cache');
-    const savedPriv = localStorage.getItem('rsa_priv_cache');
-    
-    const pubInput = document.getElementById('encryptKeyInput');
-    const privInput = document.getElementById('decryptKeyInput');
-    
-    if (pubInput && savedPub) pubInput.value = savedPub;
-    if (privInput && savedPriv) privInput.value = savedPriv;
+    const pub = localStorage.getItem('rsa_pub_cache');
+    const priv = localStorage.getItem('rsa_priv_cache');
+    if (pub) document.getElementById('encryptKeyInput').value = pub;
+    if (priv) document.getElementById('decryptKeyInput').value = priv;
 };
