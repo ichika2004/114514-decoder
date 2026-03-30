@@ -1,40 +1,30 @@
 /**
- * RSA x 114514 純數字編碼器 (256-bit 版本)
+ * RSA x 114514 純數字編碼器 (256-bit 穩定版)
+ * 修復：金鑰自動填入、快取一致性、長度優先匹配
  */
 
-// 1. 數碼對照表 (0-9)
 const HOMO_MAP = [
-    "114514", // 0
-    "1919",   // 1
-    "810",    // 2
-    "114",    // 3
-    "514",    // 4
-    "1919810",    // 5
-    "8101919",     // 6
-    "5141919",     // 7
-    "1145141919",     // 8
-    "1145141919810"       // 9
+    "114514", "1919", "810", "114", "514", 
+    "1919810", "8101919", "5141919", "1145141919", "1145141919810"
 ];
 
+const LOOKUP = HOMO_MAP.map((val, index) => ({ val, index }))
+    .sort((a, b) => b.val.length - a.val.length);
+
 /**
- * 將字元轉為純數字：'A' -> 065 -> HOMO_MAP[0]+HOMO_MAP[6]+HOMO_MAP[5]
+ * 數碼編解碼
  */
 function encodeToNumbers(code) {
     return code.toString().padStart(3, '0').split('')
         .map(digit => HOMO_MAP[parseInt(digit)]).join('');
 }
 
-/**
- * 從數字牆還原：長度優先匹配
- */
 function decodeFromNumbers(str) {
     let resultNum = "";
     let tempStr = str;
     while (tempStr.length > 0) {
         let found = false;
-        // 由長到短比對，防止 14 與 4 衝突
-        for (let i = 0; i < HOMO_BASES_SORTED.length; i++) {
-            let item = HOMO_BASES_SORTED[i];
+        for (let item of LOOKUP) {
             if (tempStr.startsWith(item.val)) {
                 resultNum += item.index;
                 tempStr = tempStr.substring(item.val.length);
@@ -46,34 +36,44 @@ function decodeFromNumbers(str) {
     }
     let chars = [];
     for (let i = 0; i < resultNum.length; i += 3) {
-        chars.push(String.fromCharCode(parseInt(resultNum.substring(i, i + 3))));
+        let code = resultNum.substring(i, i + 3);
+        if (code.length === 3) chars.push(String.fromCharCode(parseInt(code)));
     }
     return chars.join('');
 }
 
-// 建立排序後的映射表用於解碼
-const HOMO_BASES_SORTED = HOMO_MAP.map((v, i) => ({val: v, index: i}))
-    .sort((a, b) => b.val.length - a.val.length);
-
 /**
- * 核心功能
+ * 🚀 修復後的金鑰生成 (同時填入兩個欄位)
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
-    alert("正在生成 256-bit 精簡金鑰...");
+    alert("正在生成 256-bit 金鑰對並同步填入...");
+    
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     
-    // 移除 PEM 標籤與換行，使其外觀更精簡
+    // 移除 PEM 標籤使介面精簡
     const shortPub = pub.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\n|\r/g, "");
     const shortPriv = priv.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n|\r/g, "");
 
+    // 【核心修復】同時填入兩個欄位
     document.getElementById('encryptKeyInput').value = shortPub;
+    document.getElementById('decryptKeyInput').value = shortPriv;
+
+    // 同步更新 LocalStorage
+    localStorage.setItem('rsa_pub_cache', shortPub);
+    localStorage.setItem('rsa_priv_cache', shortPriv);
+    
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(shortPriv).then(() => alert("✅ 256-bit 金鑰已複製！"));
+        navigator.clipboard.writeText(shortPriv).then(() => {
+            alert("金鑰生成成功！\n1. 公鑰已填入加密區。\n2. 私鑰已填入解密區並複製到剪貼簿。");
+        });
     }
 }
 
+/**
+ * 加密與解密邏輯
+ */
 function doEncrypt() {
     const key = document.getElementById('encryptKeyInput').value;
     const text = document.getElementById('encryptInput').value;
@@ -83,13 +83,12 @@ function doEncrypt() {
     encryptor.setPublicKey(formatPEM(key, "PUBLIC"));
     const rsaRes = encryptor.encrypt(text);
 
-    if (!rsaRes) {
-        return alert("加密失敗！256-bit 限制約 20 個字元，請嘗試縮短內容。");
-    }
+    if (!rsaRes) return alert("加密失敗！內容過長，請縮短文字。");
 
-    // 轉為純數字密文牆
     const result = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join('');
     document.getElementById('encryptOutput').innerText = result;
+    
+    // 儲存當前使用的公鑰
     localStorage.setItem('rsa_pub_cache', key);
 }
 
@@ -103,10 +102,13 @@ function doDecrypt() {
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(formatPEM(key, "PRIVATE"));
         const final = decryptor.decrypt(base64);
+        
         document.getElementById('decryptOutput').innerText = final || "解密失敗：金鑰與密文不匹配";
+        
+        // 儲存當前使用的私鑰
         localStorage.setItem('rsa_priv_cache', key);
     } catch (e) {
-        alert("數字牆解析失敗，請檢查內容完整性。");
+        alert("數字牆解析失敗。");
     }
 }
 
@@ -117,10 +119,19 @@ function formatPEM(raw, type) {
 }
 
 function copyToDecrypt() {
-    document.getElementById('decryptInput').value = document.getElementById('encryptOutput').innerText;
+    const content = document.getElementById('encryptOutput').innerText;
+    if (content.length > 5) {
+        document.getElementById('decryptInput').value = content;
+    }
 }
 
+/**
+ * 頁面載入時正確恢復兩個金鑰
+ */
 window.onload = () => {
-    document.getElementById('encryptKeyInput').value = localStorage.getItem('rsa_pub_cache') || "";
-    document.getElementById('decryptKeyInput').value = localStorage.getItem('rsa_priv_cache') || "";
+    const savedPub = localStorage.getItem('rsa_pub_cache');
+    const savedPriv = localStorage.getItem('rsa_priv_cache');
+    
+    if (savedPub) document.getElementById('encryptKeyInput').value = savedPub;
+    if (savedPriv) document.getElementById('decryptKeyInput').value = savedPriv;
 };
