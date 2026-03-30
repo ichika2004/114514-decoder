@@ -1,29 +1,41 @@
 /**
- * RSA x 114514 純數字論證器 (NSYSU IM 專業修復版)
- * 修復：分段長度溢位、中文字元支援、解析歧義
+ * RSA x 114514 純數字論證器 (NSYSU IM 穩定版)
+ * 定製：256-bit 分段加密 + 0 位隔離編碼
  */
 
+// 映射表：移除結尾的 0，因為 SEP = "0"，拼接後視覺效果依然是 810
 const HOMO_MAP = [
-    "114514", "1919", "364364", "114", "514", 
-    "889464", "364", "931", "893", "1145141919"
+    "114514",       // 0
+    "1919",         // 1
+    "81",           // 2 (與 SEP 拼接後視覺為 810)
+    "114",          // 3
+    "514",          // 4
+    "889464",       // 5 
+    "364",          // 6 
+    "931",          // 7
+    "893",          // 8
+    "1145141919"    // 9 
 ];
-const SEPARATOR = "810";
-// 塊分隔符使用更獨特的 9 個 0，確保不會與 810 衝突
-const BLOCK_SEPARATOR = "000000000"; 
+
+const SEP = "0";     // 數碼分隔符
+const B_SEP = "00";  // RSA 區塊分隔符
 
 /**
- * 核心編解碼
+ * 編碼：將 ASCII 碼轉為純數字序列
  */
 function encodeToNumbers(code) {
     return code.toString().padStart(3, '0').split('')
         .map(digit => HOMO_MAP[parseInt(digit)])
-        .join(SEPARATOR);
+        .join(SEP);
 }
 
+/**
+ * 解碼：精確切割分隔符並還原
+ */
 function decodeFromNumbers(str) {
     if (!str) return "";
-    // 過濾空字串，防止 split 產生的雜訊
-    const parts = str.split(SEPARATOR).filter(p => p.length > 0);
+    // split(SEP) 會把 0 濾掉，留下原始數碼
+    const parts = str.split(SEP).filter(p => p.length > 0);
     let resultNum = "";
     
     parts.forEach(part => {
@@ -40,42 +52,61 @@ function decodeFromNumbers(str) {
 }
 
 /**
- * 🚀 加密功能 (修正分段長度)
+ *  生成 256-bit 金鑰 (完整 PEM 格式)
+ */
+function generateTestKeys() {
+    const crypt = new JSEncrypt({ default_key_size: 256 });
+    alert("正在生成 256-bit 標準 PEM 金鑰...");
+    
+    const pub = crypt.getPublicKey();
+    const priv = crypt.getPrivateKey();
+    
+    document.getElementById('encryptKeyInput').value = pub;
+    document.getElementById('decryptKeyInput').value = priv;
+
+    localStorage.setItem('rsa_pub_cache', pub);
+    localStorage.setItem('rsa_priv_cache', priv);
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(priv).then(() => {
+            alert("金鑰生成成功！\n1. 公私鑰已完整填入。\n2. 私鑰已同步複製。");
+        });
+    }
+}
+
+/**
+ * 加密功能 (支援長文本分段)
  */
 function doEncrypt() {
-    const key = document.getElementById('encryptKeyInput').value;
+    const key = document.getElementById('encryptKeyInput').value.trim();
     const text = document.getElementById('encryptInput').value;
-    if (!key || !text) return alert("請輸入公鑰與內容");
+    if (!key || !text) return alert("請輸入公鑰與明文");
 
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(key);
 
-    // 256-bit RSA 安全長度設定為 10 (支援中文/特殊字元)
-    const CHUNK_SIZE = 10;
-    let encryptedBlocks = [];
+    // 256-bit 安全分段長度
+    const CHUNK_SIZE = 5;
+    let blocks = [];
 
     for (let i = 0; i < text.length; i += CHUNK_SIZE) {
         const chunk = text.substring(i, i + CHUNK_SIZE);
         const rsaRes = encryptor.encrypt(chunk);
+        if (!rsaRes) continue;
         
-        if (!rsaRes) {
-            console.error("加密失敗，區塊內容:", chunk);
-            return alert("加密失敗：內容過長或金鑰不匹配。建議縮短分段或檢查金鑰。");
-        }
-        
-        const homoBlock = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEPARATOR);
-        encryptedBlocks.push(homoBlock);
+        const homoBlock = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEP);
+        blocks.push(homoBlock);
     }
 
-    document.getElementById('encryptOutput').innerText = encryptedBlocks.join(BLOCK_SEPARATOR);
+    document.getElementById('encryptOutput').innerText = blocks.join(B_SEP);
     localStorage.setItem('rsa_pub_cache', key);
 }
 
 /**
- * 🔓 解密功能
+ * 解密功能 (分段還原)
  */
 function doDecrypt() {
-    const key = document.getElementById('decryptKeyInput').value;
+    const key = document.getElementById('decryptKeyInput').value.trim();
     const formula = document.getElementById('decryptInput').value.trim();
     if (!key || !formula) return alert("請輸入私鑰與密文");
 
@@ -83,56 +114,29 @@ function doDecrypt() {
     decryptor.setPrivateKey(key);
 
     try {
-        const blocks = formula.split(BLOCK_SEPARATOR);
-        let finalPlainText = "";
+        // 先按區塊分隔符 (00) 切開
+        const blocks = formula.split(B_SEP).filter(b => b.length > 5);
+        let finalResult = "";
 
-        blocks.forEach((block, index) => {
+        blocks.forEach((block) => {
             const base64 = decodeFromNumbers(block);
-            const decryptedChunk = decryptor.decrypt(base64);
-            if (decryptedChunk) {
-                finalPlainText += decryptedChunk;
-            } else {
-                console.warn(`第 ${index + 1} 區塊還原失敗`);
-            }
+            const decrypted = decryptor.decrypt(base64);
+            if (decrypted) finalResult += decrypted;
         });
 
-        if (finalPlainText) {
-            document.getElementById('decryptOutput').innerText = finalPlainText;
-        } else {
-            alert("解密失敗：金鑰不匹配，或數字牆格式已損壞。");
-        }
+        document.getElementById('decryptOutput').innerText = finalResult || "解密失敗：金鑰不匹配";
         localStorage.setItem('rsa_priv_cache', key);
     } catch (e) {
-        console.error(e);
-        alert("數字牆解析失敗。");
+        alert("數字牆格式損壞。");
     }
 }
 
 /**
- * 🔧 開發者工具：清除緩存
- * 解決金鑰不匹配最快的方法就是清空重來
+ * 輔助功能
  */
-function clearSystemCache() {
-    localStorage.clear();
-    location.reload();
-}
-
-// 金鑰生成與自動填入邏輯維持不變...
-function generateTestKeys() {
-    const crypt = new JSEncrypt({ default_key_size: 256 });
-    const pub = crypt.getPublicKey();
-    const priv = crypt.getPrivateKey();
-    document.getElementById('encryptKeyInput').value = pub;
-    document.getElementById('decryptKeyInput').value = priv;
-    localStorage.setItem('rsa_pub_cache', pub);
-    localStorage.setItem('rsa_priv_cache', priv);
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(priv).then(() => alert("✅ 256-bit 金鑰對已生成！"));
-    }
-}
-
 function copyToDecrypt() {
-    document.getElementById('decryptInput').value = document.getElementById('encryptOutput').innerText;
+    const res = document.getElementById('encryptOutput').innerText;
+    if (res.length > 5) document.getElementById('decryptInput').value = res;
 }
 
 window.onload = () => {
