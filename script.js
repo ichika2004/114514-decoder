@@ -1,6 +1,6 @@
 /**
- * RSA x 114514 純數字論證器 (長文本支援版)
- * 定製：256-bit 分段加密 + 810 分隔符
+ * RSA x 114514 純數字論證器 (NSYSU IM 專業修復版)
+ * 修復：分段長度溢位、中文字元支援、解析歧義
  */
 
 const HOMO_MAP = [
@@ -8,10 +8,11 @@ const HOMO_MAP = [
     "889464", "364", "931", "893", "1145141919"
 ];
 const SEPARATOR = "810";
-const BLOCK_SEPARATOR = "810810810"; // 用三組 810 來分隔不同的加密區塊
+// 塊分隔符使用更獨特的 9 個 0，確保不會與 810 衝突
+const BLOCK_SEPARATOR = "000000000"; 
 
 /**
- * 數碼編解碼
+ * 核心編解碼
  */
 function encodeToNumbers(code) {
     return code.toString().padStart(3, '0').split('')
@@ -20,12 +21,16 @@ function encodeToNumbers(code) {
 }
 
 function decodeFromNumbers(str) {
-    const parts = str.split(SEPARATOR);
+    if (!str) return "";
+    // 過濾空字串，防止 split 產生的雜訊
+    const parts = str.split(SEPARATOR).filter(p => p.length > 0);
     let resultNum = "";
+    
     parts.forEach(part => {
         const index = HOMO_MAP.indexOf(part);
         if (index !== -1) resultNum += index.toString();
     });
+
     let chars = [];
     for (let i = 0; i < resultNum.length; i += 3) {
         let code = resultNum.substring(i, i + 3);
@@ -35,7 +40,7 @@ function decodeFromNumbers(str) {
 }
 
 /**
- *  加密功能 (分段處理)
+ * 🚀 加密功能 (修正分段長度)
  */
 function doEncrypt() {
     const key = document.getElementById('encryptKeyInput').value;
@@ -45,29 +50,29 @@ function doEncrypt() {
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(key);
 
-    // 256-bit RSA 建議每段切 20 個字元以確保 100% 成功
-    const CHUNK_SIZE = 20;
+    // 256-bit RSA 安全長度設定為 10 (支援中文/特殊字元)
+    const CHUNK_SIZE = 10;
     let encryptedBlocks = [];
 
     for (let i = 0; i < text.length; i += CHUNK_SIZE) {
         const chunk = text.substring(i, i + CHUNK_SIZE);
         const rsaRes = encryptor.encrypt(chunk);
         
-        if (!rsaRes) return alert("加密失敗，請檢查金鑰格式。");
+        if (!rsaRes) {
+            console.error("加密失敗，區塊內容:", chunk);
+            return alert("加密失敗：內容過長或金鑰不匹配。建議縮短分段或檢查金鑰。");
+        }
         
-        // 將這一塊 RSA 密文轉為數字碼
         const homoBlock = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEPARATOR);
         encryptedBlocks.push(homoBlock);
     }
 
-    // 用特殊的塊分隔符連接
-    const finalResult = encryptedBlocks.join(BLOCK_SEPARATOR);
-    document.getElementById('encryptOutput').innerText = finalResult;
+    document.getElementById('encryptOutput').innerText = encryptedBlocks.join(BLOCK_SEPARATOR);
     localStorage.setItem('rsa_pub_cache', key);
 }
 
 /**
- *  解密功能 (分段還原)
+ * 🔓 解密功能
  */
 function doDecrypt() {
     const key = document.getElementById('decryptKeyInput').value;
@@ -78,28 +83,41 @@ function doDecrypt() {
     decryptor.setPrivateKey(key);
 
     try {
-        // 先切開大區塊
         const blocks = formula.split(BLOCK_SEPARATOR);
         let finalPlainText = "";
 
-        blocks.forEach(block => {
+        blocks.forEach((block, index) => {
             const base64 = decodeFromNumbers(block);
             const decryptedChunk = decryptor.decrypt(base64);
             if (decryptedChunk) {
                 finalPlainText += decryptedChunk;
+            } else {
+                console.warn(`第 ${index + 1} 區塊還原失敗`);
             }
         });
 
-        document.getElementById('decryptOutput').innerText = finalPlainText || "解密失敗：金鑰不匹配";
+        if (finalPlainText) {
+            document.getElementById('decryptOutput').innerText = finalPlainText;
+        } else {
+            alert("解密失敗：金鑰不匹配，或數字牆格式已損壞。");
+        }
         localStorage.setItem('rsa_priv_cache', key);
     } catch (e) {
-        alert("數字牆解析失敗，格式可能受損。");
+        console.error(e);
+        alert("數字牆解析失敗。");
     }
 }
 
 /**
- * 金鑰與自動同步功能
+ * 🔧 開發者工具：清除緩存
+ * 解決金鑰不匹配最快的方法就是清空重來
  */
+function clearSystemCache() {
+    localStorage.clear();
+    location.reload();
+}
+
+// 金鑰生成與自動填入邏輯維持不變...
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
     const pub = crypt.getPublicKey();
