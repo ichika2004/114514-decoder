@@ -4,12 +4,8 @@
  * ---------------------------------------------------------
  */
 
-// 核心惡臭基數 (排除 1 以防止遞迴死循環)
 const HOMO_BASES = [114514, 1919, 810, 514, 114, 51, 4];
 
-/**
- * 惡臭論證演算法 (修正版：防止堆疊溢位)
- */
 function getHomo(n) {
     if (n === 0) return "0";
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
@@ -29,9 +25,6 @@ function getHomo(n) {
     return new Array(n).fill("1").join("+");
 }
 
-/**
- * 自動修補 PEM 標籤
- */
 function formatPEM(rawKey, type = "PUBLIC") {
     let cleanKey = rawKey.trim();
     if (!cleanKey) return "";
@@ -41,12 +34,14 @@ function formatPEM(rawKey, type = "PUBLIC") {
     return cleanKey;
 }
 
-/**
- * 加密：從加密專區讀取
- */
 function doEncrypt() {
-    const pubKeyRaw = document.getElementById('encryptKeyInput').value;
-    const text = document.getElementById('encryptInput').value;
+    const pubKeyEl = document.getElementById('encryptKeyInput');
+    const textEl = document.getElementById('encryptInput');
+    
+    if (!pubKeyEl || !textEl) return console.error("找不到加密輸入欄位！");
+
+    const pubKeyRaw = pubKeyEl.value;
+    const text = textEl.value;
     
     if (!pubKeyRaw || !text) return alert("請輸入公鑰與明文！");
 
@@ -66,12 +61,14 @@ function doEncrypt() {
     document.getElementById('encryptOutput').innerText = homoFormula;
 }
 
-/**
- * 解密：從解密專區讀取
- */
 function doDecrypt() {
-    const privKeyRaw = document.getElementById('decryptKeyInput').value;
-    const formula = document.getElementById('decryptInput').value.trim();
+    const privKeyEl = document.getElementById('decryptKeyInput');
+    const formulaEl = document.getElementById('decryptInput');
+
+    if (!privKeyEl || !formulaEl) return console.error("找不到解密輸入欄位！");
+
+    const privKeyRaw = privKeyEl.value;
+    const formula = formulaEl.value.trim();
 
     if (!privKeyRaw || !formula) return alert("請輸入私鑰與密文！");
 
@@ -102,38 +99,36 @@ function doDecrypt() {
     }
 }
 
-/**
- * 一鍵複製加密結果到解密框
- */
 function copyToDecrypt() {
     const result = document.getElementById('encryptOutput').innerText;
-    if (result.includes("尚未")) return;
-    document.getElementById('decryptInput').value = result;
+    const decryptTarget = document.getElementById('decryptInput');
+    if (result.includes("尚未") || !decryptTarget) return;
+    decryptTarget.value = result;
 }
 
-/**
- * 生成金鑰並自動複製私鑰
- */
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
     alert("正在生成金鑰對...");
-    
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     
-    document.getElementById('encryptKeyInput').value = pub;
+    const encryptKeyInput = document.getElementById('encryptKeyInput');
+    if (encryptKeyInput) encryptKeyInput.value = pub;
     
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(priv).then(() => {
-            alert("✅ 生成成功！\n1. 公鑰已填入。\n2. 私鑰已自動複製到剪貼簿。");
+            alert("✅ 生成成功！公鑰已填入，私鑰已複製。");
         });
     }
 }
 
-// 載入緩存
 window.onload = function() {
     const savedPub = localStorage.getItem('rsa_pub_cache');
     const savedPriv = localStorage.getItem('rsa_priv_cache');
-    if (savedPub) document.getElementById('encryptKeyInput').value = savedPub;
-    if (savedPriv) document.getElementById('decryptKeyInput').value = savedPriv;
+    
+    const pubInput = document.getElementById('encryptKeyInput');
+    const privInput = document.getElementById('decryptKeyInput');
+    
+    if (pubInput && savedPub) pubInput.value = savedPub;
+    if (privInput && savedPriv) privInput.value = savedPriv;
 };
