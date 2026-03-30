@@ -4,40 +4,33 @@
  * ---------------------------------------------------------
  */
 
-// 1. 核心惡臭基數 (依照論證美感排序)
-const HOMO_BASES = [114514, 1919, 810, 114, 514, 114, 51, 4, 1];
+// 核心惡臭基數 (排除 1 以防止遞迴死循環)
+const HOMO_BASES = [114514, 1919, 810, 514, 114, 51, 4];
 
 /**
- * 核心演算法：參考 MagicConch 的遞迴論證邏輯
- * 將數字 N 轉化為極具「論證感」的算式
+ * 惡臭論證演算法 (修正版：防止堆疊溢位)
  */
 function getHomo(n) {
     if (n === 0) return "0";
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
-    
-    // 如果數字就在基數裡，直接回傳
     if (HOMO_BASES.includes(n)) return n.toString();
+    if (n === 1) return "1";
 
-    // 尋找最佳基數進行拆解 (n = base * q + r)
     for (let b of HOMO_BASES) {
-        if (n > b) {
+        if (n >= b) {
             let q = Math.floor(n / b);
             let r = n % b;
-            
-            // 構造算式：base * q + r
             let qStr = (q === 1) ? "" : `*(${getHomo(q)})`;
             let res = `${b}${qStr}`;
-            
             if (r > 0) res += `+(${getHomo(r)})`;
             return res;
         }
     }
-    // 保底邏輯：如果都沒匹配到，就用 1 湊
     return new Array(n).fill("1").join("+");
 }
 
 /**
- * PEM 格式自動補全
+ * 自動修補 PEM 標籤
  */
 function formatPEM(rawKey, type = "PUBLIC") {
     let cleanKey = rawKey.trim();
@@ -49,16 +42,16 @@ function formatPEM(rawKey, type = "PUBLIC") {
 }
 
 /**
- * 【加密邏輯】從 encryptInput 讀取，輸出到 encryptOutput
+ * 加密：從加密專區讀取
  */
 function doEncrypt() {
-    const rawKey = document.getElementById('keyInput').value;
+    const pubKeyRaw = document.getElementById('encryptKeyInput').value;
     const text = document.getElementById('encryptInput').value;
     
-    if (!rawKey || !text) return alert("請輸入金鑰與要加密的明文！");
+    if (!pubKeyRaw || !text) return alert("請輸入公鑰與明文！");
 
-    const pubKey = formatPEM(rawKey, "PUBLIC");
-    localStorage.setItem('rsa_key_cache', rawKey);
+    const pubKey = formatPEM(pubKeyRaw, "PUBLIC");
+    localStorage.setItem('rsa_pub_cache', pubKeyRaw);
 
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(pubKey);
@@ -66,7 +59,6 @@ function doEncrypt() {
 
     if (!rsaRes) return alert("RSA 加密失敗！");
 
-    // 將 RSA Base64 的每個字元轉為論證算式，並用 [ ] 包起來區隔
     const homoFormula = rsaRes.split('').map(char => {
         return `[${getHomo(char.charCodeAt(0))}]`;
     }).join('+');
@@ -75,26 +67,23 @@ function doEncrypt() {
 }
 
 /**
- * 【解密邏輯】從 decryptInput 讀取，輸出到 decryptOutput
+ * 解密：從解密專區讀取
  */
 function doDecrypt() {
-    const rawKey = document.getElementById('keyInput').value;
+    const privKeyRaw = document.getElementById('decryptKeyInput').value;
     const formula = document.getElementById('decryptInput').value.trim();
 
-    if (!rawKey || !formula) return alert("請輸入私鑰與要解密的惡臭密文！");
+    if (!privKeyRaw || !formula) return alert("請輸入私鑰與密文！");
 
-    const privKey = formatPEM(rawKey, "PRIVATE");
-    localStorage.setItem('rsa_key_cache', rawKey);
+    const privKey = formatPEM(privKeyRaw, "PRIVATE");
+    localStorage.setItem('rsa_priv_cache', privKeyRaw);
 
     try {
-        // 解析算式：依照 + 號分割，並過濾掉空值
         const base64Result = formula.split('+')
             .map(s => s.trim())
             .filter(s => s.length > 0)
             .map(seg => {
-                // 移除 [ ] 並使用 Function 計算算式值
                 const cleanSeg = seg.replace(/[\[\]]/g, '').trim();
-                if (!cleanSeg) return "";
                 const val = new Function(`return ${cleanSeg}`)();
                 return String.fromCharCode(val);
             }).join('');
@@ -109,9 +98,17 @@ function doDecrypt() {
             alert("解密失敗！私鑰可能不正確。");
         }
     } catch (e) {
-        console.error("解析失敗:", e);
-        alert("算式格式錯誤，無法解析。");
+        alert("算式解析失敗。");
     }
+}
+
+/**
+ * 一鍵複製加密結果到解密框
+ */
+function copyToDecrypt() {
+    const result = document.getElementById('encryptOutput').innerText;
+    if (result.includes("尚未")) return;
+    document.getElementById('decryptInput').value = result;
 }
 
 /**
@@ -119,24 +116,24 @@ function doDecrypt() {
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成 1024-bit RSA 金鑰對...");
+    alert("正在生成金鑰對...");
     
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     
-    document.getElementById('keyInput').value = pub;
+    document.getElementById('encryptKeyInput').value = pub;
     
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(priv).then(() => {
-            alert("✅ 生成成功！\n1. 公鑰已自動填入。\n2. 私鑰已自動複製到您的剪貼簿。");
+            alert("✅ 生成成功！\n1. 公鑰已填入。\n2. 私鑰已自動複製到剪貼簿。");
         });
-    } else {
-        console.log("您的私鑰如下：\n", priv);
-        alert("公鑰已填入，但自動複製失敗，請按 F12 查看 Console。");
     }
 }
 
+// 載入緩存
 window.onload = function() {
-    const savedKey = localStorage.getItem('rsa_key_cache');
-    if (savedKey) document.getElementById('keyInput').value = savedKey;
+    const savedPub = localStorage.getItem('rsa_pub_cache');
+    const savedPriv = localStorage.getItem('rsa_priv_cache');
+    if (savedPub) document.getElementById('encryptKeyInput').value = savedPub;
+    if (savedPriv) document.getElementById('decryptKeyInput').value = savedPriv;
 };
