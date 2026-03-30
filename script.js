@@ -1,133 +1,108 @@
 /**
- * ---------------------------------------------------------
- * RSA x 114514 惡臭論證器 (完全比照 MagicConch 演算法)
- * ---------------------------------------------------------
+ * 核心惡臭論證演算法
+ * 參考 https://lab.magiconch.com/homo/
  */
+const HOMO_BASES = [114514, 1919, 810, 114, 514, 191, 81, 14, 5, 4, 1];
 
-// 1. 精確的惡臭基數序列
-const HOMO_BASES = [114514, 1919, 810, 114, 514, 191, 81, 14, 51, 4, 1];
-
-/**
- * 核心論證演算法：比照 lab.magiconch.com/homo/
- * 採用 n = base * q + r 的遞迴拆解
- */
 function getHomo(n) {
-    if (n === 0) return "0";
+    if (n === 0) return "(114514-114514)";
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
-    
-    // 如果數字就在基數列表裡，直接回傳
+
+    // 為了確保 1919 和 810 出現，我們對較小的 ASCII 碼進行「補數論證」
+    // 邏輯：n = (1919 + 810) - (1919 + 810 - n)
+    if (n < 810) {
+        const offset = 1919 + 810;
+        return `(${offset}-(${simpleHomo(offset - n)}))`;
+    }
+    return simpleHomo(n);
+}
+
+// 基礎遞迴拆解
+function simpleHomo(n) {
     if (HOMO_BASES.includes(n)) return n.toString();
+    if (n === 1) return "1";
 
-    // 尋找最大的基數 b，使得 n > b
     for (let b of HOMO_BASES) {
-        if (n > b) {
-            // 特殊處理：當基數為 1 時，直接用加法湊齊，防止 1*n 的無限遞迴
-            if (b === 1) {
-                return new Array(n).fill("1").join("+");
-            }
-
+        if (n >= b && b > 1) {
             let q = Math.floor(n / b);
             let r = n % b;
-            
-            // 遞迴公式：(b*q+r)
-            let res = `(${b}*${getHomo(q)})`;
-            if (r > 0) res += `+(${getHomo(r)})`;
+            let qStr = (q === 1) ? "" : `*(${simpleHomo(q)})`;
+            let res = `${b}${qStr}`;
+            if (r > 0) res += `+(${simpleHomo(r)})`;
             return res;
         }
     }
-    return n.toString();
+    return new Array(n).fill("1").join("+");
 }
 
-/**
- * 加密：RSA -> 每個字元獨立進行「論證」
- */
+function formatPEM(raw, type) {
+    let c = (raw || "").trim();
+    return c.includes("-----BEGIN") ? c : `-----BEGIN ${type} KEY-----\n${c}\n-----END ${type} KEY-----`;
+}
+
+// 【加密】
 function doEncrypt() {
-    const pubKeyRaw = document.getElementById('encryptKeyInput').value;
+    const key = document.getElementById('encryptKeyInput').value;
     const text = document.getElementById('encryptInput').value;
-    
-    if (!pubKeyRaw || !text) return alert("請輸入公鑰與明文！");
+    if (!key || !text) return alert("請填寫公鑰與明文");
 
-    const pubKey = formatPEM(pubKeyRaw, "PUBLIC");
     const encryptor = new JSEncrypt();
-    encryptor.setPublicKey(pubKey);
-    const rsaRes = encryptor.encrypt(text);
+    encryptor.setPublicKey(formatPEM(key, "PUBLIC"));
+    const rsa = encryptor.encrypt(text);
+    if (!rsa) return alert("加密失敗，請檢查金鑰");
 
-    if (!rsaRes) return alert("RSA 加密失敗！");
-
-    // 為了視覺上的「11451411451~」，每個字元的算式都包在 [] 內，並緊密相連
-    const homoFormula = rsaRes.split('').map(char => {
-        return `[${getHomo(char.charCodeAt(0))}]`;
-    }).join('');
-
-    document.getElementById('encryptOutput').innerText = homoFormula;
-    localStorage.setItem('rsa_pub_cache', pubKeyRaw);
+    // 轉化為 1145141919810 算式牆
+    const result = rsa.split('').map(c => `[${getHomo(c.charCodeAt(0))}]`).join('');
+    document.getElementById('encryptOutput').innerText = result;
+    localStorage.setItem('rsa_pub', key);
 }
 
-/**
- * 解密：使用正規表達式抓取每個論證塊
- */
+// 【解密】
 function doDecrypt() {
-    const privKeyRaw = document.getElementById('decryptKeyInput').value;
+    const key = document.getElementById('decryptKeyInput').value;
     const formula = document.getElementById('decryptInput').value.trim();
-
-    if (!privKeyRaw || !formula) return alert("請輸入私鑰與惡臭密文！");
-
-    const privKey = formatPEM(privKeyRaw, "PRIVATE");
-    localStorage.setItem('rsa_priv_cache', privKeyRaw);
+    if (!key || !formula) return alert("請填寫私鑰與算式");
 
     try {
-        // 使用 Regex 抓取 [ ... ] 內容，這能處理複雜的括號嵌套
         const segments = formula.match(/\[(.*?)\]/g);
-        if (!segments) throw new Error("找不到有效的惡臭論證塊");
+        if (!segments) throw new Error("無效的算式格式");
 
-        const base64Result = segments.map(seg => {
-            const cleanSeg = seg.slice(1, -1); // 移除 [ ]
-            // 使用 new Function 計算算式值，這比 eval 穩定
-            const val = new Function(`return ${cleanSeg}`)();
-            return String.fromCharCode(val);
+        const base64 = segments.map(seg => {
+            const clean = seg.slice(1, -1);
+            return String.fromCharCode(new Function(`return ${clean}`)());
         }).join('');
 
         const decryptor = new JSEncrypt();
-        decryptor.setPrivateKey(privKey);
-        const result = decryptor.decrypt(base64Result);
-
-        if (result) {
-            document.getElementById('decryptOutput').innerText = result;
+        decryptor.setPrivateKey(formatPEM(key, "PRIVATE"));
+        const final = decryptor.decrypt(base64);
+        
+        if (final) {
+            document.getElementById('decryptOutput').innerText = final;
         } else {
-            alert("解密失敗！金鑰不匹配或密文損壞。");
+            alert("解密失敗：私鑰不匹配");
         }
     } catch (e) {
-        console.error(e);
-        alert("算式解析失敗：格式不正確或包含非法字元。");
+        alert("解析失敗：" + e.message);
     }
-}
-
-// 輔助函式 (自動修正 PEM、金鑰生成、複製功能等)
-function formatPEM(rawKey, type) {
-    let clean = (rawKey || "").trim();
-    if (!clean.includes("-----BEGIN")) {
-        return `-----BEGIN ${type} KEY-----\n${clean}\n-----END ${type} KEY-----`;
-    }
-    return clean;
-}
-
-function copyToDecrypt() {
-    const res = document.getElementById('encryptOutput').innerText;
-    if (res && !res.includes("等待")) document.getElementById('decryptInput').value = res;
 }
 
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成金鑰...");
+    alert("正在生成金鑰，這可能需要幾秒鐘...");
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     document.getElementById('encryptKeyInput').value = pub;
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(priv).then(() => alert("✅ 公鑰已填入，私鑰已複製！"));
+        navigator.clipboard.writeText(priv).then(() => alert("✅ 公鑰已填入，私鑰已自動複製！"));
     }
 }
 
-window.onload = function() {
-    document.getElementById('encryptKeyInput').value = localStorage.getItem('rsa_pub_cache') || "";
-    document.getElementById('decryptKeyInput').value = localStorage.getItem('rsa_priv_cache') || "";
+function copyToDecrypt() {
+    const res = document.getElementById('encryptOutput').innerText;
+    if (res.length > 20) document.getElementById('decryptInput').value = res;
+}
+
+window.onload = () => {
+    document.getElementById('encryptKeyInput').value = localStorage.getItem('rsa_pub') || "";
+    document.getElementById('decryptKeyInput').value = localStorage.getItem('rsa_priv') || "";
 };

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>惡臭論證加密器</title>
+    <title>惡臭論證編碼器</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -11,47 +11,50 @@
 
 <div class="container">
     <header>
-        <h1>惡臭論證加密器</h1>
+        <h1>惡臭論證編碼器</h1>
     </header>
 
     <div class="section-card">
-        <h2>🔒 加密專區 (Encryption)</h2>
+        <h2>🔒 惡臭加密 (Encryption)</h2>
         <div class="input-group">
-            <label>加密公鑰 (Public Key)</label>
+            <label>1. 加密公鑰 (Public Key)</label>
             <textarea id="encryptKeyInput" placeholder="在此輸入公鑰..."></textarea>
             
-            <label>待加密明文</label>
-            <textarea id="encryptInput" placeholder="輸入你想說的話..."></textarea>
+            <label>2. 待加密明文</label>
+            <textarea id="encryptInput" placeholder="在此輸入要轉化為惡臭算式的文字..."></textarea>
         </div>
         
         <div class="button-group">
-            <button onclick="doEncrypt()">產生惡臭論證密文</button>
-            <button class="secondary" onclick="generateTestKeys()">生成測試金鑰 (自動複製私鑰)</button>
+            <button onclick="doEncrypt()">進行惡臭論證</button>
+            <button class="secondary" onclick="generateTestKeys()">生成金鑰 (自動複製私鑰)</button>
         </div>
         
-        <label>加密結果 (論證算式)</label>
-        <div id="encryptOutput" class="output-box">尚未加密...</div>
-        <button class="secondary" onclick="copyToDecrypt()">一鍵填入下方解密框 ↓</button>
+        <label>加密結果</label>
+        <div id="encryptOutput" class="output-box">尚未進行論證...</div>
+        <button class="secondary" onclick="copyToDecrypt()">一鍵填入解密框 ↓</button>
     </div>
 
     <div class="section-card">
-        <h2>🔓 解密專區 (Decryption)</h2>
+        <h2>🔓 惡臭還原 (Decryption)</h2>
         <div class="input-group">
-            <label>解密私鑰 (Private Key)</label>
+            <label>1. 解密私鑰 (Private Key)</label>
             <textarea id="decryptKeyInput" placeholder="在此輸入私鑰..."></textarea>
             
-            <label>待解密密文 (惡臭算式)</label>
-            <textarea id="decryptInput" placeholder="在此貼上要解密的算式..."></textarea>
+            <label>2. 待解密算式</label>
+            <textarea id="decryptInput" placeholder="在此貼上算式進行還原..."></textarea>
         </div>
         
         <div class="button-group">
             <button onclick="doDecrypt()">還原明文</button>
         </div>
         
-        <label>還原結果 (明文)</label>
+        <label>還原結果</label>
         <div id="decryptOutput" class="output-box">等待解密...</div>
     </div>
 
+    <footer>
+        <p>© 2026 僅供 Homo 交流使用。</p>
+    </footer>
 </div>
 
 <script src="script.js"></script>
