@@ -5,46 +5,41 @@
  */
 
 // 114514 核心基數
-const HOMO_BASES = [114514, 514, 114, 14, 11, 5, 4, 1];
-
-/**
- * 114514 遞迴論證演算法：將整數 N 轉化為算式字串
- */
-/**
- * 修正後的 114514 遞迴演算法
- */
 function getHomo(n) {
-    // 終止條件 1：如果是 0
+    // 1. 基礎情況：0 與負數處理
     if (n === 0) return "0";
-    
-    // 終止條件 2：如果數字本身就在基礎數組裡，直接回傳字串，防止無限遞迴
-    if (HOMO_BASES.includes(n)) return n.toString();
-    
-    // 處理負數
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
-    
+
+    // 2. 核心防線：如果數字就在基礎數組裡，直接回傳，絕對不遞迴
+    if (HOMO_BASES.includes(n)) return n.toString();
+
+    // 3. 處理極小數字 (防止 base=1 的無限遞迴)
+    // 如果 n 小於 11，直接用 1 湊出來，不再進入遞迴
+    if (n < 11) {
+        return new Array(n).fill("1").join("+");
+    }
+
+    // 4. 遞迴拆解
     for (let base of HOMO_BASES) {
-        // 只有當 n 大於該基數時才進行拆解
-        if (n > base) { 
+        // 只有當 n 比基數大時才拆解，且排除 base 為 1 的情況（交給上面的 n < 11 處理）
+        if (n >= base && base > 1) { 
             let q = Math.floor(n / base);
             let r = n % base;
-            let res = "";
             
-            // 如果商數是 1，就不用再遞迴商數了
-            if (q === 1) {
-                res = `${base}`;
-            } else {
-                // 如果基數是 1，商數就是 n 自己，不能遞迴，直接轉字串
-                let qStr = (base === 1) ? q.toString() : `(${getHomo(q)})`;
-                res = `${base}*${qStr}`;
+            // 拆解商數 q
+            let qStr = (q === 1) ? "" : `*(${getHomo(q)})`;
+            let res = `${base}${qStr}`;
+            
+            // 拆解餘數 r
+            if (r > 0) {
+                res += `+(${getHomo(r)})`;
             }
-            
-            // 處理餘數
-            if (r > 0) res += `+(${getHomo(r)})`;
             return res;
         }
     }
-    return n.toString();
+    
+    // 5. 保險：如果真的沒被上面的邏輯抓到，就回傳 1 的加法
+    return new Array(n).fill("1").join("+");
 }
 
 /**
