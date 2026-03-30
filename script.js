@@ -89,19 +89,36 @@ function doDecrypt() {
     const rawKey = document.getElementById('keyInput').value;
     const formula = document.getElementById('cipherOutput').innerText;
 
-    if (!rawKey || formula.includes("等待")) return alert("請輸入私鑰與有效的算式密文！");
+    // 1. 基本檢查
+    if (!rawKey || !formula || formula.includes("等待")) {
+        return alert("請輸入私鑰與有效的算式密文！");
+    }
 
     const privKey = formatPEM(rawKey, "PRIVATE");
     localStorage.setItem('rsa_key_cache', rawKey);
 
     try {
-        // 解析算式區段並還原為字元
-        const base64 = formula.split('+').map(seg => {
-            const cleanSeg = seg.replace(/\[|\]/g, '');
-            // 注意：eval 在此僅用於計算我們受控生成的 114514 算式
-            return String.fromCharCode(eval(cleanSeg));
-        }).join('');
+        // 2. 核心修正：增加 .filter(seg => seg.trim() !== "") 
+        // 這樣可以過濾掉結尾多餘的 + 號產生的空字串
+        const base64 = formula.split('+')
+            .filter(seg => seg.trim() !== "") 
+            .map(seg => {
+                // 移除中括號
+                const cleanSeg = seg.replace(/[\[\]]/g, '').trim();
+                
+                // 安全檢查：如果清洗後還是空的，跳過
+                if (!cleanSeg) return "";
 
+                // 執行運算並轉回字元
+                try {
+                    return String.fromCharCode(eval(cleanSeg));
+                } catch (evalErr) {
+                    console.error("算式片段解析失敗:", cleanSeg);
+                    throw new Error("算式格式錯誤");
+                }
+            }).join('');
+
+        // 3. RSA 解密
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(privKey);
         const result = decryptor.decrypt(base64);
@@ -109,13 +126,13 @@ function doDecrypt() {
         if (result) {
             document.getElementById('plainInput').value = result;
         } else {
-            alert("解密失敗！私鑰可能不正確。");
+            alert("解密失敗！可能私鑰不匹配，或是密文在傳輸過程中損壞。");
         }
     } catch (e) {
-        alert("算式解析錯誤：" + e.message);
+        console.error(e);
+        alert("解析過程發生錯誤：" + e.message);
     }
 }
-
 /**
  * 生成測試金鑰對
  */
