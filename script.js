@@ -1,26 +1,17 @@
 /**
- * RSA x 114514 純數字論證器 (NSYSU IM 專業版)
- * 定製：使用 810 作為分隔符，套用使用者指定 HOMO_MAP
+ * RSA x 114514 純數字論證器 (長文本支援版)
+ * 定製：256-bit 分段加密 + 810 分隔符
  */
 
-// 1. 完全遵循使用者指定的數碼映射
 const HOMO_MAP = [
-    "114514",       // 0
-    "1919",         // 1
-    "364364",       // 2 
-    "114",          // 3
-    "514",          // 4
-    "889464",       // 5 
-    "364",          // 6 
-    "931",          // 7
-    "893",          // 8
-    "1145141919"    // 9 
+    "114514", "1919", "364364", "114", "514", 
+    "889464", "364", "931", "893", "1145141919"
 ];
-
 const SEPARATOR = "810";
+const BLOCK_SEPARATOR = "810810810"; // 用三組 810 來分隔不同的加密區塊
 
 /**
- * 編碼邏輯：ASCII(065) -> "114514810811919810191981"
+ * 數碼編解碼
  */
 function encodeToNumbers(code) {
     return code.toString().padStart(3, '0').split('')
@@ -28,20 +19,13 @@ function encodeToNumbers(code) {
         .join(SEPARATOR);
 }
 
-/**
- * 解碼邏輯：利用 810 分隔符精確切割
- */
 function decodeFromNumbers(str) {
-    if (!str) return "";
-    // 先按 810 切開，保證 364364 不會被誤認成兩個 364
     const parts = str.split(SEPARATOR);
     let resultNum = "";
-    
     parts.forEach(part => {
         const index = HOMO_MAP.indexOf(part);
         if (index !== -1) resultNum += index.toString();
     });
-
     let chars = [];
     for (let i = 0; i < resultNum.length; i += 3) {
         let code = resultNum.substring(i, i + 3);
@@ -51,57 +35,81 @@ function decodeFromNumbers(str) {
 }
 
 /**
- *  金鑰生成 (256-bit PEM)
+ *  加密功能 (分段處理)
  */
-function generateTestKeys() {
-    const crypt = new JSEncrypt({ default_key_size: 256 });
-    alert("正在生成 256-bit PEM 金鑰...");
-    const pub = crypt.getPublicKey();
-    const priv = crypt.getPrivateKey();
-    
-    document.getElementById('encryptKeyInput').value = pub;
-    document.getElementById('decryptKeyInput').value = priv;
-
-    localStorage.setItem('rsa_pub_cache', pub);
-    localStorage.setItem('rsa_priv_cache', priv);
-    
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(priv).then(() => alert("金鑰已填入，私鑰已複製！"));
-    }
-}
-
 function doEncrypt() {
     const key = document.getElementById('encryptKeyInput').value;
     const text = document.getElementById('encryptInput').value;
-    if (!key || !text) return alert("請輸入公鑰與明文");
+    if (!key || !text) return alert("請輸入公鑰與內容");
 
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(key);
-    const rsaRes = encryptor.encrypt(text);
 
-    if (!rsaRes) return alert("加密失敗！256-bit 限制長度約 20 字。");
+    // 256-bit RSA 建議每段切 20 個字元以確保 100% 成功
+    const CHUNK_SIZE = 20;
+    let encryptedBlocks = [];
 
-    // 每一組字元編碼之間也用 810 連結，形成壯觀的數字牆
-    const result = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEPARATOR);
-    document.getElementById('encryptOutput').innerText = result;
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+        const chunk = text.substring(i, i + CHUNK_SIZE);
+        const rsaRes = encryptor.encrypt(chunk);
+        
+        if (!rsaRes) return alert("加密失敗，請檢查金鑰格式。");
+        
+        // 將這一塊 RSA 密文轉為數字碼
+        const homoBlock = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEPARATOR);
+        encryptedBlocks.push(homoBlock);
+    }
+
+    // 用特殊的塊分隔符連接
+    const finalResult = encryptedBlocks.join(BLOCK_SEPARATOR);
+    document.getElementById('encryptOutput').innerText = finalResult;
     localStorage.setItem('rsa_pub_cache', key);
 }
 
+/**
+ *  解密功能 (分段還原)
+ */
 function doDecrypt() {
     const key = document.getElementById('decryptKeyInput').value;
     const formula = document.getElementById('decryptInput').value.trim();
     if (!key || !formula) return alert("請輸入私鑰與密文");
 
+    const decryptor = new JSEncrypt();
+    decryptor.setPrivateKey(key);
+
     try {
-        const base64 = decodeFromNumbers(formula);
-        const decryptor = new JSEncrypt();
-        decryptor.setPrivateKey(key);
-        const final = decryptor.decrypt(base64);
-        
-        document.getElementById('decryptOutput').innerText = final || "解密失敗：金鑰不匹配";
+        // 先切開大區塊
+        const blocks = formula.split(BLOCK_SEPARATOR);
+        let finalPlainText = "";
+
+        blocks.forEach(block => {
+            const base64 = decodeFromNumbers(block);
+            const decryptedChunk = decryptor.decrypt(base64);
+            if (decryptedChunk) {
+                finalPlainText += decryptedChunk;
+            }
+        });
+
+        document.getElementById('decryptOutput').innerText = finalPlainText || "解密失敗：金鑰不匹配";
         localStorage.setItem('rsa_priv_cache', key);
     } catch (e) {
-        alert("數字牆解析失敗。");
+        alert("數字牆解析失敗，格式可能受損。");
+    }
+}
+
+/**
+ * 金鑰與自動同步功能
+ */
+function generateTestKeys() {
+    const crypt = new JSEncrypt({ default_key_size: 256 });
+    const pub = crypt.getPublicKey();
+    const priv = crypt.getPrivateKey();
+    document.getElementById('encryptKeyInput').value = pub;
+    document.getElementById('decryptKeyInput').value = priv;
+    localStorage.setItem('rsa_pub_cache', pub);
+    localStorage.setItem('rsa_priv_cache', priv);
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(priv).then(() => alert("✅ 256-bit 金鑰對已生成！"));
     }
 }
 
