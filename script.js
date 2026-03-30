@@ -44,7 +44,7 @@ function decodeFromNumbers(str) {
 }
 
 /**
- * 🚀 修復後的金鑰生成：保留完整前後綴
+ * 修復後的金鑰生成：保留完整前後綴
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
