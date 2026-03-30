@@ -51,7 +51,7 @@ function decodeFromNumbers(str) {
 }
 
 /**
- * 🚀 金鑰生成 (256-bit PEM)
+ *  金鑰生成 (256-bit PEM)
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
@@ -66,7 +66,7 @@ function generateTestKeys() {
     localStorage.setItem('rsa_priv_cache', priv);
     
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(priv).then(() => alert("✅ 金鑰已填入，私鑰已複製！"));
+        navigator.clipboard.writeText(priv).then(() => alert("金鑰已填入，私鑰已複製！"));
     }
 }
 
