@@ -1,41 +1,35 @@
 /**
  * ---------------------------------------------------------
- * RSA x 114514 惡臭加密器 - 終極修復版 (NSYSU IM)
- * 解決 ReferenceError 與 Unexpected end of input
+ * RSA x 114514 惡臭加密器 (v4.0 惡臭外溢版)
+ * 專為 NSYSU IM 打造：解決解析錯誤 & 強化視覺效果
  * ---------------------------------------------------------
  */
 
-// 1. 全域變數定義 (絕對必須放在最上方)
+// 1. 核心惡臭基數 (按優先權排序)
 const HOMO_BASES = [114514, 514, 114, 14, 11, 5, 4, 1];
 
 /**
- * 114514 遞迴演算法 (已修正堆疊溢位)
+ * 貪婪湊數法：將數字 N 轉化為純粹的 114514 數字堆疊
+ * 例如：65 會變成 "14+14+14+14+5+4"
  */
 function getHomo(n) {
     if (n === 0) return "0";
-    if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
-    if (HOMO_BASES.includes(n)) return n.toString();
-
-    // 處理 10 以下小數字，直接加法，避免 base=1 的無限遞迴
-    if (n < 11) {
-        return new Array(n).fill("1").join("+");
-    }
-
-    for (let base of HOMO_BASES) {
-        if (n >= base && base > 1) { 
-            let q = Math.floor(n / base);
-            let r = n % base;
-            let qStr = (q === 1) ? "" : `*(${getHomo(q)})`;
-            let res = `${base}${qStr}`;
-            if (r > 0) res += `+(${getHomo(r)})`;
-            return res;
+    let temp = n;
+    let res = [];
+    
+    // 遍歷基數，能塞多少就塞多少，產生 11451411451... 的視覺感
+    for (let b of HOMO_BASES) {
+        while (temp >= b) {
+            res.push(b);
+            temp -= b;
         }
     }
-    return new Array(n).fill("1").join("+");
+    // 使用 + 連接，看起來會非常像一串連續數字
+    return res.join('+');
 }
 
 /**
- * PEM 格式自動補全
+ * 自動修正 PEM 標籤
  */
 function formatPEM(rawKey, type = "PUBLIC") {
     let cleanKey = rawKey.trim();
@@ -47,7 +41,7 @@ function formatPEM(rawKey, type = "PUBLIC") {
 }
 
 /**
- * 加密邏輯
+ * 加密：將明文轉為一連串「惡臭算式」
  */
 function doEncrypt() {
     const rawKey = document.getElementById('keyInput').value;
@@ -62,59 +56,41 @@ function doEncrypt() {
     encryptor.setPublicKey(pubKey);
     const rsaRes = encryptor.encrypt(text);
 
-    if (!rsaRes) return alert("RSA 加密失敗，請檢查公鑰格式。");
+    if (!rsaRes) return alert("RSA 加密失敗！");
 
-    // 產生密文算式
+    // 將每個 ASCII 字元轉為一組算式，並用「空白」區隔字元
+    // 這樣視覺上會像是一整塊 114514 數字牆
     const homoFormula = rsaRes.split('').map(char => {
-        return `[${getHomo(char.charCodeAt(0))}]`;
-    }).join('+');
+        return getHomo(char.charCodeAt(0));
+    }).join(' '); // 這裡用空白區隔每個字元，避免 + 號過多導致解析混亂
 
     document.getElementById('cipherOutput').innerText = homoFormula;
 }
 
 /**
- * 解密邏輯 (強化空值檢查，解決 Unexpected end of input)
+ * 解密：將數字牆還原 (修正 Unexpected end of input)
  */
 function doDecrypt() {
     const rawKey = document.getElementById('keyInput').value;
-    // 取得內容並去除前後空白
     const formula = document.getElementById('cipherOutput').innerText.trim();
 
-    if (!rawKey || !formula || formula.includes("這裡將顯示") || formula.includes("等待")) {
-        return alert("請輸入私鑰與有效的算式密文！");
-    }
+    if (!rawKey || !formula || formula.includes("等待")) return alert("請輸入私鑰與有效的密文！");
 
     const privKey = formatPEM(rawKey, "PRIVATE");
     localStorage.setItem('rsa_key_cache', rawKey);
 
     try {
-        // 分解算式
-        const segments = formula.split('+');
-        let base64Result = "";
-
-        for (let seg of segments) {
-            let s = seg.trim();
-            if (!s) continue; // 跳過空的加號間隙
-
-            // 移除中括號
-            let cleanSeg = s.replace(/[\[\]]/g, '').trim();
+        // 先按空白切分字元，再按加號計算數值
+        const base64Result = formula.split(/\s+/).map(charSeg => {
+            if (!charSeg.trim()) return "";
             
-            // 重要：如果移除括號後是空的，代表這段算式無效，跳過以防 eval 出錯
-            if (cleanSeg.length === 0) continue;
-
-            try {
-                // 使用 new Function 替代直接 eval，稍微安全且效能較好
-                const val = new Function(`return ${cleanSeg}`)();
-                if (typeof val === 'number') {
-                    base64Result += String.fromCharCode(val);
-                }
-            } catch (evalErr) {
-                console.error("算式解析失敗的片段:", cleanSeg);
-                // 繼續嘗試下一段，不直接中斷
-            }
-        }
-
-        if (!base64Result) throw new Error("算式還原後為空");
+            // 將 "514+114+1" 這種算式安全地加總
+            const charCode = charSeg.split('+')
+                .filter(num => num.trim().length > 0)
+                .reduce((sum, num) => sum + parseInt(num, 10), 0);
+                
+            return String.fromCharCode(charCode);
+        }).join('');
 
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(privKey);
@@ -123,26 +99,26 @@ function doDecrypt() {
         if (result) {
             document.getElementById('plainInput').value = result;
         } else {
-            alert("解密失敗！私鑰與公鑰不匹配。");
+            alert("解密失敗！私鑰可能不正確。");
         }
     } catch (e) {
-        console.error("解密過程出錯:", e);
-        alert("解析錯誤: " + e.message);
+        console.error("解密錯誤:", e);
+        alert("解析失敗，請確認密文格式是否正確。");
     }
 }
 
 /**
- * 金鑰生成與初始化
+ * 其他功能保持不變
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成金鑰對...");
+    alert("正在生成金鑰...");
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     document.getElementById('keyInput').value = pub;
-    console.log("--- 測試用私鑰 ---");
+    console.log("--- 私鑰 ---");
     console.log(priv);
-    alert("公鑰已填入。私鑰已印在 Console (F12)，請務必複製存檔！");
+    alert("公鑰已填入。私鑰已印在 Console (F12)。");
 }
 
 window.onload = function() {
