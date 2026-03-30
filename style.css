@@ -1,19 +1,14 @@
 :root {
-    /* 根據你提供的色號定義變數 */
-    --color-face: #A1736B;      /* 顔 - 強調色 */
-    --color-clothes: #3E343F;   /* 服 - 主標題與按鈕 */
-    --color-blind: #979F9B;     /* ブラインド - 次要元素/邊框 */
-    --color-wall: #C9BFB6;      /* 壁 - 網頁背景 */
-    
-    --bg-color: var(--color-wall);
-    --card-bg: #FFFFFF;
-    --text-main: var(--color-clothes);
+    --color-face: #A1736B;      /* 顔 */
+    --color-clothes: #3E343F;   /* 服 */
+    --color-blind: #979F9B;     /* ブラインド */
+    --color-wall: #C9BFB6;      /* 壁 */
 }
 
 body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-main);
+    font-family: 'Consolas', 'Monaco', 'Microsoft JhengHei', sans-serif;
+    background-color: var(--color-wall);
+    color: var(--color-clothes);
     margin: 0;
     padding: 20px;
     display: flex;
@@ -32,24 +27,16 @@ header {
 
 h1 {
     color: var(--color-clothes);
-    font-size: 2.5em;
-    letter-spacing: 3px;
-    margin-bottom: 10px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-}
-
-.subtitle {
-    color: var(--color-face);
-    font-weight: bold;
-    font-size: 1em;
+    font-size: 2.2em;
+    letter-spacing: 4px;
 }
 
 .section-card {
-    background: var(--card-bg);
+    background: #FFFFFF;
     padding: 30px;
     border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(62, 52, 63, 0.15);
-    margin-bottom: 35px;
+    box-shadow: 0 10px 30px rgba(62, 52, 63, 0.1);
+    margin-bottom: 30px;
     border: 1px solid var(--color-blind);
 }
 
@@ -57,70 +44,61 @@ h2 {
     color: var(--color-clothes);
     border-left: 8px solid var(--color-face);
     padding-left: 15px;
-    margin-top: 0;
-    font-size: 1.5em;
+    font-size: 1.4em;
 }
 
 label {
     display: block;
-    margin: 20px 0 8px;
+    margin: 15px 0 5px;
     font-weight: bold;
     color: var(--color-clothes);
-    font-size: 0.9em;
 }
 
 textarea {
     width: 100%;
-    height: 120px;
-    padding: 15px;
+    height: 100px;
+    padding: 12px;
     border: 2px solid var(--color-blind);
     border-radius: 12px;
     box-sizing: border-box;
-    font-family: 'Consolas', monospace;
     font-size: 14px;
-    background-color: #fdfdfd;
-    color: var(--color-clothes);
-    transition: all 0.3s ease;
+    background-color: #FAFAFA;
 }
 
 textarea:focus {
     outline: none;
     border-color: var(--color-face);
-    box-shadow: 0 0 10px rgba(161, 115, 107, 0.2);
 }
 
 .output-box {
-    background: #F8F6F4; /* 淺米色背景 */
+    background: #F4F2F0;
     border: 2px dashed var(--color-face);
-    padding: 20px;
+    padding: 15px;
     border-radius: 12px;
-    min-height: 60px;
+    min-height: 50px;
     word-break: break-all;
-    font-family: 'Courier New', monospace;
+    font-family: monospace;
     font-size: 13px;
     color: var(--color-face);
-    margin: 15px 0;
-    line-height: 1.5;
+    margin: 10px 0;
 }
 
 button {
     background-color: var(--color-clothes);
     color: #FFFFFF;
     border: none;
-    padding: 12px 28px;
+    padding: 12px 24px;
     border-radius: 10px;
     cursor: pointer;
     font-weight: bold;
-    font-size: 15px;
-    transition: all 0.3s;
-    margin-top: 10px;
+    transition: 0.3s;
     margin-right: 10px;
+    margin-top: 10px;
 }
 
 button:hover {
     background-color: var(--color-face);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 button.secondary {
@@ -129,16 +107,10 @@ button.secondary {
     border: 2px solid var(--color-clothes);
 }
 
-button.secondary:hover {
-    background-color: var(--color-blind);
-    color: white;
-    border-color: var(--color-blind);
-}
-
 footer {
     text-align: center;
-    color: var(--color-face);
-    font-size: 0.85em;
-    margin-top: 50px;
-    padding-bottom: 30px;
+    color: var(--color-clothes);
+    font-size: 0.8em;
+    margin-top: 40px;
+    opacity: 0.7;
 }

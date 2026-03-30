@@ -1,46 +1,37 @@
 /**
- * 核心惡臭論證演算法
- * 參考 https://lab.magiconch.com/homo/
+ * 114514 核心論證演算法 (純淨數碼版)
  */
-const HOMO_BASES = [114514, 1919, 810, 114, 514, 191, 81, 14, 5, 4, 1];
+const HOMO_BASES = [114514, 1919, 810, 114, 514, 191, 81, 14, 51, 4, 1];
 
 function getHomo(n) {
-    if (n === 0) return "(114514-114514)";
+    if (n === 0) return "(114-114)";
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
 
-    // 為了確保 1919 和 810 出現，我們對較小的 ASCII 碼進行「補數論證」
-    // 邏輯：n = (1919 + 810) - (1919 + 810 - n)
-    if (n < 810) {
-        const offset = 1919 + 810;
-        return `(${offset}-(${simpleHomo(offset - n)}))`;
-    }
-    return simpleHomo(n);
+    // 為了讓大數字 114514, 1919, 810 必定出現
+    // 我們使用「強制展開法」：n = 114514 + 1919 + 810 - (114514 + 1919 + 810 - n)
+    // 這樣字串裡就只會出現這些數碼，而不會出現它們相加後的結果
+    const target = 114514 + 1919 + 810;
+    const diff = target - n;
+
+    // 這裡我們直接寫死字串，確保 2729 不會出現
+    return `(114514+1919+810-(${simpleDecompose(diff)}))`;
 }
 
-// 基礎遞迴拆解
-function simpleHomo(n) {
-    if (HOMO_BASES.includes(n)) return n.toString();
-    if (n === 1) return "1";
-
+// 基礎遞迴拆解：只使用 HOMO_BASES 中的數字
+function simpleDecompose(n) {
+    if (n === 0) return "0";
     for (let b of HOMO_BASES) {
-        if (n >= b && b > 1) {
-            let q = Math.floor(n / b);
-            let r = n % b;
-            let qStr = (q === 1) ? "" : `*(${simpleHomo(q)})`;
-            let res = `${b}${qStr}`;
-            if (r > 0) res += `+(${simpleHomo(r)})`;
-            return res;
+        if (n >= b) {
+            if (n === b) return b.toString();
+            // 這裡必須使用基數 b，剩下的繼續遞迴
+            return `${b}+(${simpleDecompose(n - b)})`;
         }
     }
-    return new Array(n).fill("1").join("+");
 }
 
-function formatPEM(raw, type) {
-    let c = (raw || "").trim();
-    return c.includes("-----BEGIN") ? c : `-----BEGIN ${type} KEY-----\n${c}\n-----END ${type} KEY-----`;
-}
-
-// 【加密】
+/**
+ * 加密與解密邏輯
+ */
 function doEncrypt() {
     const key = document.getElementById('encryptKeyInput').value;
     const text = document.getElementById('encryptInput').value;
@@ -49,15 +40,14 @@ function doEncrypt() {
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(formatPEM(key, "PUBLIC"));
     const rsa = encryptor.encrypt(text);
-    if (!rsa) return alert("加密失敗，請檢查金鑰");
+    if (!rsa) return alert("RSA 加密失敗");
 
-    // 轉化為 1145141919810 算式牆
+    // 轉化為純淨惡臭算式牆
     const result = rsa.split('').map(c => `[${getHomo(c.charCodeAt(0))}]`).join('');
     document.getElementById('encryptOutput').innerText = result;
     localStorage.setItem('rsa_pub', key);
 }
 
-// 【解密】
 function doDecrypt() {
     const key = document.getElementById('decryptKeyInput').value;
     const formula = document.getElementById('decryptInput').value.trim();
@@ -65,30 +55,30 @@ function doDecrypt() {
 
     try {
         const segments = formula.match(/\[(.*?)\]/g);
-        if (!segments) throw new Error("無效的算式格式");
-
         const base64 = segments.map(seg => {
             const clean = seg.slice(1, -1);
+            // new Function 會幫我們計算 (114514+1919+810-...) 的值
             return String.fromCharCode(new Function(`return ${clean}`)());
         }).join('');
 
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(formatPEM(key, "PRIVATE"));
         const final = decryptor.decrypt(base64);
-        
-        if (final) {
-            document.getElementById('decryptOutput').innerText = final;
-        } else {
-            alert("解密失敗：私鑰不匹配");
-        }
+        document.getElementById('decryptOutput').innerText = final || "解密失敗：金鑰不匹配";
     } catch (e) {
         alert("解析失敗：" + e.message);
     }
 }
 
+// 其餘輔助函式
+function formatPEM(raw, type) {
+    let c = (raw || "").trim();
+    return c.includes("-----BEGIN") ? c : `-----BEGIN ${type} KEY-----\n${c}\n-----END ${type} KEY-----`;
+}
+
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成金鑰，這可能需要幾秒鐘...");
+    alert("正在生成金鑰...");
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     document.getElementById('encryptKeyInput').value = pub;
@@ -98,8 +88,7 @@ function generateTestKeys() {
 }
 
 function copyToDecrypt() {
-    const res = document.getElementById('encryptOutput').innerText;
-    if (res.length > 20) document.getElementById('decryptInput').value = res;
+    document.getElementById('decryptInput').value = document.getElementById('encryptOutput').innerText;
 }
 
 window.onload = () => {
