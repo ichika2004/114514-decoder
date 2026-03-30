@@ -12,29 +12,27 @@
 <div class="box">
     <h2>惡臭編碼器</h2>
     
-    <section>
-    <h3>🔑 金鑰設定</h3>
-    <textarea id="keyInput" placeholder="在此輸入公鑰或私鑰..."></textarea>
-    <button onclick="generateTestKeys()">生成測試金鑰並自動複製私鑰</button>
-</section>
-
-<hr>
-
-<section>
+   <div>
     <h3>🔒 惡臭加密 (明文 -> 密文)</h3>
     <textarea id="encryptInput" placeholder="輸入要加密的明文..."></textarea>
     <button onclick="doEncrypt()">產生惡臭密文</button>
-    <div id="encryptOutput" class="output-box">加密結果將顯示於此...</div>
-</section>
+    
+    <div id="encryptOutput" style="border:1px solid #ccc; min-height:50px; padding:10px; word-break:break-all;">
+        加密結果將顯示於此...
+    </div>
+</div>
 
 <hr>
 
-<section>
+<div>
     <h3>🔓 惡臭解密 (密文 -> 明文)</h3>
-    <textarea id="decryptInput" placeholder="在此貼上要解密的惡臭算式..."></textarea>
+    <textarea id="decryptInput" placeholder="貼上惡臭算式進行解密..."></textarea>
     <button onclick="doDecrypt()">還原明文</button>
-    <div id="decryptOutput" class="output-box">解密結果將顯示於此...</div>
-</section>
+    
+    <div id="decryptOutput" style="border:1px solid #ccc; min-height:50px; padding:10px;">
+        解密結果將顯示於此...
+    </div>
+</div>g
 </div>
 
 <script src="script.js"></script>
