@@ -56,7 +56,7 @@ function formatPEM(rawKey, type = "PUBLIC") {
 }
 
 /**
- * 執行加密：明文 -> RSA -> Base64 -> 114514 算式
+ * 執行加密：明文 -> RSA -> Base64 -> 114514 算式，執行加密：確保產生的算式格式嚴謹，不帶多餘符號
  */
 function doEncrypt() {
     const rawKey = document.getElementById('keyInput').value;
@@ -64,17 +64,16 @@ function doEncrypt() {
     
     if (!rawKey || !text) return alert("請輸入金鑰與明文！");
 
-    // 自動格式化並儲存金鑰到瀏覽器
     const pubKey = formatPEM(rawKey, "PUBLIC");
     localStorage.setItem('rsa_key_cache', rawKey);
 
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(pubKey);
-    const rsaRes = encryptor.encrypt(text); // 得到 Base64
+    const rsaRes = encryptor.encrypt(text);
 
     if (!rsaRes) return alert("RSA 加密失敗，請檢查公鑰格式。");
 
-    // 將 Base64 每個字元轉為 ASCII 碼，再轉為 [算式]
+    // 使用 .join('+') 確保中間有加號，但開頭與結尾絕對不會有多餘的 +
     const homoFormula = rsaRes.split('').map(char => {
         return `[${getHomo(char.charCodeAt(0))}]`;
     }).join('+');
@@ -83,13 +82,12 @@ function doEncrypt() {
 }
 
 /**
- * 執行解密：114514 算式 -> 還原 Base64 -> RSA -> 明文
+ * 執行解密：強化的算式清洗邏輯，過濾空字串防止 eval 報錯
  */
 function doDecrypt() {
     const rawKey = document.getElementById('keyInput').value;
-    const formula = document.getElementById('cipherOutput').innerText;
+    const formula = document.getElementById('cipherOutput').innerText.trim();
 
-    // 1. 基本檢查
     if (!rawKey || !formula || formula.includes("等待")) {
         return alert("請輸入私鑰與有效的算式密文！");
     }
@@ -98,27 +96,24 @@ function doDecrypt() {
     localStorage.setItem('rsa_key_cache', rawKey);
 
     try {
-        // 2. 核心修正：增加 .filter(seg => seg.trim() !== "") 
-        // 這樣可以過濾掉結尾多餘的 + 號產生的空字串
+        // 核心修正：split 後先 filter 掉空字元，再進行 map
         const base64 = formula.split('+')
-            .filter(seg => seg.trim() !== "") 
+            .map(s => s.trim()) // 去除前後空格
+            .filter(s => s.length > 0) // 過濾掉空字串，防止 Unexpected end of input
             .map(seg => {
-                // 移除中括號
+                // 移除所有中括號並再次 trim
                 const cleanSeg = seg.replace(/[\[\]]/g, '').trim();
                 
-                // 安全檢查：如果清洗後還是空的，跳過
-                if (!cleanSeg) return "";
-
                 // 執行運算並轉回字元
+                // 使用一個小的 try-catch 包裹 eval，方便追蹤錯誤片段
                 try {
                     return String.fromCharCode(eval(cleanSeg));
                 } catch (evalErr) {
-                    console.error("算式片段解析失敗:", cleanSeg);
-                    throw new Error("算式格式錯誤");
+                    console.error("解析失敗的算式片段:", cleanSeg);
+                    throw new Error("算式格式損壞");
                 }
             }).join('');
 
-        // 3. RSA 解密
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(privKey);
         const result = decryptor.decrypt(base64);
@@ -126,10 +121,10 @@ function doDecrypt() {
         if (result) {
             document.getElementById('plainInput').value = result;
         } else {
-            alert("解密失敗！可能私鑰不匹配，或是密文在傳輸過程中損壞。");
+            alert("解密失敗！私鑰可能不正確，或密文長度過長（超過 1024-bit RSA 負荷）。");
         }
     } catch (e) {
-        console.error(e);
+        console.error("詳細錯誤資訊:", e);
         alert("解析過程發生錯誤：" + e.message);
     }
 }
