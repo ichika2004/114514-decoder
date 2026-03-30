@@ -1,40 +1,42 @@
 /**
- * RSA x 114514 純數字論證編碼器
- * 修復：保留完整 PEM 前後綴、優化自動填入邏輯
+ * RSA x 114514 純數字論證器
+ * 特色：使用 0 作為分隔號，保留完整 PEM 前後綴
  */
 
 const HOMO_MAP = [
-    "114514", "1919", "810", "114", "514", 
-    "1919810", "8101919", "5141919", "1145141919", "1145141919810"
+    "114514",         // 0
+    "1919",           // 1
+    "81",             // 2 
+    "114",            // 3
+    "514",            // 4
+    "191981",         // 5 
+    "811919",         // 6 
+    "5141919",        // 7
+    "1145141919",     // 8
+    "114514191981"    // 9 (原本 1145141919810)
 ];
 
-// 建立解碼查找表
-const LOOKUP = HOMO_MAP.map((val, index) => ({ val, index }))
-    .sort((a, b) => b.val.length - a.val.length);
+const SEPARATOR = "0";
 
 /**
- * 數碼編解碼演算法
+ * 編碼邏輯
  */
 function encodeToNumbers(code) {
     return code.toString().padStart(3, '0').split('')
-        .map(digit => HOMO_MAP[parseInt(digit)]).join('');
+        .map(digit => HOMO_MAP[parseInt(digit)])
+        .join(SEPARATOR);
 }
 
+/**
+ * 解碼邏輯 (精確切割 0)
+ */
 function decodeFromNumbers(str) {
+    const parts = str.split(SEPARATOR);
     let resultNum = "";
-    let tempStr = str;
-    while (tempStr.length > 0) {
-        let found = false;
-        for (let item of LOOKUP) {
-            if (tempStr.startsWith(item.val)) {
-                resultNum += item.index;
-                tempStr = tempStr.substring(item.val.length);
-                found = true;
-                break;
-            }
-        }
-        if (!found) break;
-    }
+    parts.forEach(part => {
+        const index = HOMO_MAP.indexOf(part);
+        if (index !== -1) resultNum += index.toString();
+    });
     let chars = [];
     for (let i = 0; i < resultNum.length; i += 3) {
         let code = resultNum.substring(i, i + 3);
@@ -44,46 +46,39 @@ function decodeFromNumbers(str) {
 }
 
 /**
- * 修復後的金鑰生成：保留完整前後綴
+ *  生成 256-bit 金鑰 (完整 PEM 格式)
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({ default_key_size: 256 });
-    alert("正在生成 256-bit 標準 PEM 金鑰...");
+    alert("正在生成標準 256-bit PEM 金鑰...");
     
-    const pub = crypt.getPublicKey();   // 這裡原本就帶有前後綴
-    const priv = crypt.getPrivateKey(); // 這裡原本就帶有前後綴
+    const pub = crypt.getPublicKey();   // 帶有 -----BEGIN PUBLIC KEY-----
+    const priv = crypt.getPrivateKey(); // 帶有 -----BEGIN PRIVATE KEY-----
     
-    // 【修正】直接填入完整金鑰，不再進行 replace 濾除
     document.getElementById('encryptKeyInput').value = pub;
     document.getElementById('decryptKeyInput').value = priv;
 
-    // 更新快取
     localStorage.setItem('rsa_pub_cache', pub);
     localStorage.setItem('rsa_priv_cache', priv);
     
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(priv).then(() => {
-            alert(" 金鑰生成成功！\n1. 公鑰與私鑰已完整填入。\n2. 私鑰已同步複製到剪貼簿。");
-        });
+        navigator.clipboard.writeText(priv).then(() => alert("金鑰已同步填入，私鑰已複製！"));
     }
 }
 
-/**
- * 加密與解密功能
- */
 function doEncrypt() {
     const key = document.getElementById('encryptKeyInput').value;
     const text = document.getElementById('encryptInput').value;
     if (!key || !text) return alert("請輸入公鑰與明文");
 
     const encryptor = new JSEncrypt();
-    // 這裡 setPublicKey 可以處理帶有或不帶有標籤的金鑰
-    encryptor.setPublicKey(key); 
+    encryptor.setPublicKey(key);
     const rsaRes = encryptor.encrypt(text);
 
-    if (!rsaRes) return alert("加密失敗！內容可能過長。");
+    if (!rsaRes) return alert("加密失敗！256-bit 空間有限，請縮短文字。");
 
-    const result = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join('');
+    // 用 0 串接所有數碼
+    const result = rsaRes.split('').map(c => encodeToNumbers(c.charCodeAt(0))).join(SEPARATOR);
     document.getElementById('encryptOutput').innerText = result;
     localStorage.setItem('rsa_pub_cache', key);
 }
@@ -107,16 +102,12 @@ function doDecrypt() {
 }
 
 function copyToDecrypt() {
-    const content = document.getElementById('encryptOutput').innerText;
-    if (content.length > 5) {
-        document.getElementById('decryptInput').value = content;
-    }
+    document.getElementById('decryptInput').value = document.getElementById('encryptOutput').innerText;
 }
 
 window.onload = () => {
     const savedPub = localStorage.getItem('rsa_pub_cache');
     const savedPriv = localStorage.getItem('rsa_priv_cache');
-    
     if (savedPub) document.getElementById('encryptKeyInput').value = savedPub;
     if (savedPriv) document.getElementById('decryptKeyInput').value = savedPriv;
 };
