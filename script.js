@@ -67,7 +67,7 @@ function doDecrypt() {
 
     if (!privKeyEl || !formulaEl) return console.error("找不到解密輸入欄位！");
 
-    const privKeyRaw = privKeyEl.value;
+    const privKeyRaw = privKeyEl.value.trim();
     const formula = formulaEl.value.trim();
 
     if (!privKeyRaw || !formula) return alert("請輸入私鑰與密文！");
@@ -76,15 +76,28 @@ function doDecrypt() {
     localStorage.setItem('rsa_priv_cache', privKeyRaw);
 
     try {
+        // 1. 分解算式
         const base64Result = formula.split('+')
             .map(s => s.trim())
             .filter(s => s.length > 0)
-            .map(seg => {
+            .map((seg, index) => {
+                // 移除中括號 [ ]
                 const cleanSeg = seg.replace(/[\[\]]/g, '').trim();
-                const val = new Function(`return ${cleanSeg}`)();
-                return String.fromCharCode(val);
+                
+                if (!cleanSeg) return "";
+
+                try {
+                    // 使用 new Function 計算算式值
+                    const val = new Function(`return ${cleanSeg}`)();
+                    return String.fromCharCode(val);
+                } catch (evalErr) {
+                    // 【關鍵偵錯】如果某一段算式壞了，印出編號與內容
+                    console.error(`第 ${index} 段算式解析失敗: "${cleanSeg}"`);
+                    throw new Error(`第 ${index} 段算式格式錯誤`);
+                }
             }).join('');
 
+        // 2. RSA 解密
         const decryptor = new JSEncrypt();
         decryptor.setPrivateKey(privKey);
         const result = decryptor.decrypt(base64Result);
@@ -92,10 +105,12 @@ function doDecrypt() {
         if (result) {
             document.getElementById('decryptOutput').innerText = result;
         } else {
-            alert("解密失敗！私鑰可能不正確。");
+            // 如果解析沒錯但解密失敗，通常是私鑰不匹配
+            alert("解密失敗！這通常代表「私鑰不正確」或「密文被改動過」。");
         }
     } catch (e) {
-        alert("算式解析失敗。");
+        console.error("解密過程出錯:", e);
+        alert("算式解析失敗：" + e.message);
     }
 }
 
