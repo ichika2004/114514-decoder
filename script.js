@@ -1,29 +1,29 @@
 /**
  * ---------------------------------------------------------
- * RSA x 114514 惡臭加密器 
+ * RSA x 114514 惡臭加密器 - 最終整合版 (NSYSU IM Project)
  * ---------------------------------------------------------
  */
 
-// 1. 核心基數定義 (必須放在最上方)
+// 1. 核心基數定義 (這行絕對不能刪，且必須放在最前面)
 const HOMO_BASES = [114514, 514, 114, 14, 11, 5, 4, 1];
 
 /**
- * 修正後的 114514 遞迴演算法 (防止堆疊溢位)
+ * 核心演算法：將整數 N 拆解為 114514 算式 (已修正無限遞迴)
  */
 function getHomo(n) {
     if (n === 0) return "0";
     if (n < 0) return `-( ${getHomo(Math.abs(n))} )`;
 
-    // 如果數字就在基礎數組裡，直接回傳，防止進入遞迴
+    // 終止條件：如果數字就在基礎數組裡，直接回傳
     if (HOMO_BASES.includes(n)) return n.toString();
 
-    // 處理極小數字，防止 base=1 的無限遞迴
+    // 處理極小數字，防止進入無限遞迴
     if (n < 11) {
         return new Array(n).fill("1").join("+");
     }
 
     for (let base of HOMO_BASES) {
-        // 只有當 n 比基數大時才拆解，且排除 base 為 1 的情況
+        // 只有當 n 大於基數且基數大於 1 時才拆解
         if (n >= base && base > 1) { 
             let q = Math.floor(n / base);
             let r = n % base;
@@ -39,7 +39,7 @@ function getHomo(n) {
 }
 
 /**
- * 自動修補 PEM 格式
+ * 自動修補 PEM 格式標籤
  */
 function formatPEM(rawKey, type = "PUBLIC") {
     let cleanKey = rawKey.trim();
@@ -51,7 +51,7 @@ function formatPEM(rawKey, type = "PUBLIC") {
 }
 
 /**
- * 執行加密：明文 -> RSA -> 114514 算式
+ * 執行加密邏輯
  */
 function doEncrypt() {
     const rawKey = document.getElementById('keyInput').value;
@@ -60,7 +60,7 @@ function doEncrypt() {
     if (!rawKey || !text) return alert("請輸入金鑰與明文！");
 
     const pubKey = formatPEM(rawKey, "PUBLIC");
-    localStorage.setItem('rsa_key_cache', rawKey);
+    localStorage.setItem('rsa_key_cache', rawKey); // 儲存金鑰到瀏覽器
 
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(pubKey);
@@ -68,7 +68,7 @@ function doEncrypt() {
 
     if (!rsaRes) return alert("RSA 加密失敗，請檢查公鑰格式。");
 
-    // 產生算式密文
+    // 產生 114514 算式密文
     const homoFormula = rsaRes.split('').map(char => {
         return `[${getHomo(char.charCodeAt(0))}]`;
     }).join('+');
@@ -77,22 +77,22 @@ function doEncrypt() {
 }
 
 /**
- * 執行解密：114514 算式 -> RSA -> 明文
+ * 執行解密邏輯 (已修正 Unexpected end of input)
  */
 function doDecrypt() {
     const rawKey = document.getElementById('keyInput').value;
     const formula = document.getElementById('cipherOutput').innerText.trim();
 
-    if (!rawKey || !formula || formula.includes("等待")) return alert("請輸入私鑰與有效的算式密文！");
+    if (!rawKey || !formula || formula.includes("等待")) return alert("請輸入私鑰與有效的密文！");
 
     const privKey = formatPEM(rawKey, "PRIVATE");
     localStorage.setItem('rsa_key_cache', rawKey);
 
     try {
-        // 強化後的算式清洗，防止 Unexpected end of input
+        // 清洗算式並還原為 Base64 字串
         const base64 = formula.split('+')
             .map(s => s.trim())
-            .filter(s => s.length > 0)
+            .filter(s => s.length > 0) // 過濾空字串防止 eval 報錯
             .map(seg => {
                 const cleanSeg = seg.replace(/[\[\]]/g, '').trim();
                 return String.fromCharCode(eval(cleanSeg));
@@ -105,31 +105,31 @@ function doDecrypt() {
         if (result) {
             document.getElementById('plainInput').value = result;
         } else {
-            alert("解密失敗！請檢查私鑰是否正確。");
+            alert("解密失敗！私鑰可能不正確。");
         }
     } catch (e) {
-        console.error("解析錯誤:", e);
+        console.error("解密錯誤:", e);
         alert("解析過程發生錯誤：" + e.message);
     }
 }
 
 /**
- * 生成測試金鑰對
+ * 生成 RSA 測試金鑰對
  */
 function generateTestKeys() {
     const crypt = new JSEncrypt({default_key_size: 1024});
-    alert("正在生成 1024-bit 金鑰，請稍候...");
+    alert("正在生成金鑰，請稍候...");
     const pub = crypt.getPublicKey();
     const priv = crypt.getPrivateKey();
     
     document.getElementById('keyInput').value = pub;
-    console.log("--- 你的測試用私鑰 (供解密使用) ---");
+    console.log("--- 測試用私鑰 (請保存以供解密) ---");
     console.log(priv);
-    alert("公鑰已填入。私鑰已印在 Console (F12)，請複製保存！");
+    alert("已填入公鑰。私鑰已印在主控台 (F12)，請複製保存！");
 }
 
 /**
- * 初始化：載入緩存與設定拖放
+ * 初始化功能：自動填入與檔案拖放
  */
 window.onload = function() {
     const savedKey = localStorage.getItem('rsa_key_cache');
@@ -142,6 +142,7 @@ window.onload = function() {
     });
     keyArea.addEventListener('drop', (e) => {
         e.preventDefault();
+        keyArea.style.borderColor = '#ddd';
         const file = e.dataTransfer.files[0];
         if (file) {
             const reader = new FileReader();
