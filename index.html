@@ -12,32 +12,29 @@
 <div class="box">
     <h2>惡臭編碼器</h2>
     
-    <div class="input-section">
-        <label>1. RSA 公鑰 (加密) 或 私鑰 (解密)：</label>
-        <textarea id="keyInput" placeholder="在此貼上 PEM 格式的金鑰..."></textarea>
-        
-        <div class="btn-group">
-            <button class="secondary-btn" onclick="generateTestKeys()">生成測試金鑰對</button>
-        </div>
-    </div>
+    <section>
+    <h3>🔑 金鑰設定</h3>
+    <textarea id="keyInput" placeholder="在此輸入公鑰或私鑰..."></textarea>
+    <button onclick="generateTestKeys()">生成測試金鑰並自動複製私鑰</button>
+</section>
 
-    <div class="input-section">
-        <label>2. 輸入明文：</label>
-        <textarea id="plainInput" placeholder="例如：你是一個一個一個"></textarea>
-    </div>
+<hr>
 
-    <div class="action-section">
-        <button class="primary-btn" onclick="doEncrypt()">產生惡臭算式密文 ▼</button>
-    </div>
-    
-    <div class="result-label">密文輸出 ：</div>
-    <div class="result-box" id="cipherOutput">等待加密...</div>
+<section>
+    <h3>🔒 惡臭加密 (明文 -> 密文)</h3>
+    <textarea id="encryptInput" placeholder="輸入要加密的明文..."></textarea>
+    <button onclick="doEncrypt()">產生惡臭密文</button>
+    <div id="encryptOutput" class="output-box">加密結果將顯示於此...</div>
+</section>
 
-    <hr>
+<hr>
 
-    <div class="action-section">
-        <button class="primary-btn" onclick="doDecrypt()">從算式還原明文 ▲</button>
-    </div>
+<section>
+    <h3>🔓 惡臭解密 (密文 -> 明文)</h3>
+    <textarea id="decryptInput" placeholder="在此貼上要解密的惡臭算式..."></textarea>
+    <button onclick="doDecrypt()">還原明文</button>
+    <div id="decryptOutput" class="output-box">解密結果將顯示於此...</div>
+</section>
 </div>
 
 <script src="script.js"></script>
