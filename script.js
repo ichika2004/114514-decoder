@@ -1,36 +1,49 @@
 /**
- * RSA x 114514 純數字論證器 (高密度優化版)
- * 特色：6-bit 直接映射技術，密文長度縮減 33%
+ * RSA x 114514 純數字論證器 (高密度穩定版)
+ * 解決：利用 0, 2, 7 進行三級隔離，徹底消除解析歧義
  */
 
-// 1. 映射表：維持不含 0 的原則
-const HOMO_MAP = ["114514", "1919", "81", "114", "514", "889464", "364", "931", "893", "1145141919"];
-const SEP = "0";     // 分隔數字
-const C_SEP = "00";  // 分隔 Base64 字元
-const B_SEP = "000"; // 分隔 RSA 區塊
+// 映射表：確保不含分隔符號 0, 2, 7
+const HOMO_MAP = [
+    "114514",       // 0
+    "1919",         // 1
+    "81",           // 2 (與 SEP 拼接後視覺依然含有 8, 1)
+    "114",          // 3
+    "514",          // 4
+    "889464",       // 5 
+    "364",          // 6 
+    "931",          // 7 -> 注意：如果字典有 931，則 7 不能當分隔符。
+    "893",          // 8
+    "1145141919"    // 9 
+];
 
-// Base64 索引表
+// 重新校對：字典裡含有 1, 3, 4, 5, 6, 8, 9。 
+// 真正完全沒出現的數字是：0, 2, 7 (但 7 在 931 裡出現過)。
+// 所以我們改用：0, 2 作為分隔符。
+
+const SEP = "0";     // 一級：分隔數碼 (例如 00)
+const C_SEP = "020"; // 二級：分隔字元 (例如 A 與 B)
+const B_SEP = "222"; // 三級：分隔區塊 (RSA 區塊)
+
 const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 
 /**
- * 高密度編碼：將 1 個 Base64 字元轉為 2 組數碼 (00~64)
+ * 編碼：Base64 字元 -> 純數字
  */
 function encodeB64Char(char) {
     const index = B64_CHARS.indexOf(char);
     if (index === -1) return "";
-    // 將索引轉為 2 位數 (00-64)，例如 index 5 變成 "05"
     return index.toString().padStart(2, '0').split('')
         .map(digit => HOMO_MAP[parseInt(digit)])
         .join(SEP);
 }
 
 /**
- * 高密度解碼：從數碼牆還原 Base64
+ * 解碼：純數字 -> Base64 字元
  */
-function decodeToB64(blockStr) {
+function decodeFromHomo(blockStr) {
     const chars = blockStr.split(C_SEP).filter(c => c.length > 0);
-    let resultB64 = "";
-
+    let resB64 = "";
     chars.forEach(charStr => {
         const digits = charStr.split(SEP).filter(d => d.length > 0);
         let indexStr = "";
@@ -38,15 +51,13 @@ function decodeToB64(blockStr) {
             const idx = HOMO_MAP.indexOf(d);
             if (idx !== -1) indexStr += idx.toString();
         });
-        if (indexStr.length === 2) {
-            resultB64 += B64_CHARS[parseInt(indexStr)];
-        }
+        if (indexStr.length === 2) resB64 += B64_CHARS[parseInt(indexStr)];
     });
-    return resultB64;
+    return resB64;
 }
 
 /**
- *  加密功能
+ *  加密 (分段控制)
  */
 function doEncrypt() {
     const key = document.getElementById('encryptKeyInput').value.trim();
@@ -56,7 +67,8 @@ function doEncrypt() {
     const encryptor = new JSEncrypt();
     encryptor.setPublicKey(key);
 
-    const CHUNK_SIZE = 10; // 密度提高後，分段可以稍微放大
+    // 256-bit 安全分段：每段 4 個字元 (絕對不溢位)
+    const CHUNK_SIZE = 4;
     let encryptedBlocks = [];
 
     for (let i = 0; i < text.length; i += CHUNK_SIZE) {
@@ -64,7 +76,6 @@ function doEncrypt() {
         const rsaRes = encryptor.encrypt(chunk);
         if (!rsaRes) continue;
         
-        // 直接對 RSA 產出的 Base64 字串進行高密度映射
         const homoBlock = rsaRes.split('').map(c => encodeB64Char(c)).join(C_SEP);
         encryptedBlocks.push(homoBlock);
     }
@@ -72,7 +83,7 @@ function doEncrypt() {
 }
 
 /**
- *  解密功能
+ *  解密 (穩定還原)
  */
 function doDecrypt() {
     const key = document.getElementById('decryptKeyInput').value.trim();
@@ -87,17 +98,17 @@ function doDecrypt() {
         let finalResult = "";
 
         blocks.forEach((block, idx) => {
-            const base64 = decodeToB64(block);
-            const decrypted = decryptor.decrypt(base64);
+            const b64 = decodeFromHomo(block);
+            const decrypted = decryptor.decrypt(b64);
             if (decrypted) {
                 finalResult += decrypted;
             } else {
-                console.error(`第 ${idx + 1} 區塊解密失敗`);
+                console.error(`第 ${idx + 1} 區塊 RSA 解密失敗，還原 B64 為: ${b64}`);
             }
         });
-        document.getElementById('decryptOutput').innerText = finalResult || "解密失敗：金鑰不符";
+        document.getElementById('decryptOutput').innerText = finalResult || "解密失敗：金鑰不匹配";
     } catch (e) {
-        alert("數字牆損壞，無法解析。");
+        alert("數字牆格式損壞，無法解析。");
     }
 }
 
@@ -112,7 +123,7 @@ function generateTestKeys() {
     document.getElementById('decryptKeyInput').value = priv;
     localStorage.setItem('rsa_pub_cache', pub);
     localStorage.setItem('rsa_priv_cache', priv);
-    alert(" 會員制 256-bit 金鑰對已生成！");
+    alert("特製 256-bit 金鑰對已生成！");
 }
 
 function copyToDecrypt() {
